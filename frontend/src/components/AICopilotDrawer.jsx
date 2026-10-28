@@ -25,7 +25,7 @@ import {
   Layers,
   Cpu,
   User,
-  TrendingUp
+  TrendingUp, Code2, Power
 } from 'lucide-react';
 import {
   fetchCaseAgents,
@@ -35,6 +35,7 @@ import {
   sendRemediationNotification,
   submitHumanDecision
 } from '../api/client';
+import { useExternalPlugin } from '../plugin/PluginContext';
 
 function AgentReportCard({ analysis }) {
   const m = analysis?.metrics;
@@ -118,9 +119,11 @@ export default function AICopilotDrawer({
   caseData,
   initialAnalysis,
   onAnalysisUpdated,
-  onSelectCitation
+  onSelectCitation,
+  isStandalonePage = false
 }) {
   const navigate = useNavigate();
+  const { hostBankProfile, setIsIntegrationModalOpen, setIsPluginConnected } = useExternalPlugin();
   const inlinePreviewRef = useRef(null);
 
   const [analysis, setAnalysis] = useState(initialAnalysis || null);
@@ -671,6 +674,49 @@ export default function AICopilotDrawer({
 
   return (
     <div className="w-full rounded-2xl bg-[#080f20] border-2 border-amber-400/40 shadow-[0_10px_50px_rgba(0,0,0,0.75)] overflow-hidden flex flex-col">
+      {/* Decoupled B2B External Plugin Integration Strip */}
+      <div className="px-4 sm:px-6 py-2 bg-[#050a16] border-b border-amber-400/25 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 text-slate-300">
+          <span className="px-2 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-400/30 font-mono font-bold">
+            EXT-PLUGIN v2.4.0-enterprise
+          </span>
+          <span className="text-slate-400">
+            Host CRM: <strong className="text-white">{hostBankProfile}</strong>
+          </span>
+          <span className="text-slate-600">•</span>
+          <span className="text-emerald-400 font-mono">REST API Bridge Active (Zero-Raw-PII)</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setIsIntegrationModalOpen(true)}
+            className="px-2.5 py-1 rounded-lg bg-[#0d172e] hover:bg-[#16274d] border border-[#223968] text-blue-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <Code2 className="w-3 h-3" />
+            <span>SDK & API Spec</span>
+          </button>
+          {!isStandalonePage && (
+            <>
+              <button
+                onClick={() => navigate(`/plugin/${caseData?.id || ''}`)}
+                className="px-2.5 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                title="Open this dossier inside the standalone external B2B plugin console"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Pop-out Standalone App</span>
+              </button>
+              <button
+                onClick={() => setIsPluginConnected(false)}
+                className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-red-950/60 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                title="Disconnect plugin to demonstrate BankDesk in pure traditional CRM mode"
+              >
+                <Power className="w-3 h-3" />
+                <span>Disconnect</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Top Extension Header */}
       <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#0e172c] via-[#131e38] to-[#1a1c2e] border-b border-[#223254] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -885,7 +931,8 @@ export default function AICopilotDrawer({
               {onSelectCitation && (
                 <button
                   onClick={() =>
-                    onSelectCitation(
+                    onSelectCitation,
+  isStandalonePage = false(
                       inlinePreviewDoc.doc.id,
                       inlinePreviewDoc.lineNumber,
                       null,

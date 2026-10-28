@@ -9,33 +9,42 @@ import ClientFinancialProfile from './pages/ClientFinancialProfile';
 import DocumentsList from './pages/DocumentsList';
 import TasksList from './pages/TasksList';
 import HistoryList from './pages/HistoryList';
+import { PluginProvider } from './plugin/PluginContext';
+import PluginStandalonePage from './plugin/PluginStandalonePage';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          {/* Primary English routes */}
-          <Route path="cases" element={<CasesList />} />
-          <Route path="cases/:id" element={<CaseDetail />} />
-          <Route path="clients" element={<ClientsList />} />
-          <Route path="clients/:id/finances" element={<ClientFinancialProfile />} />
-          <Route path="documents" element={<DocumentsList />} />
-          <Route path="tasks" element={<TasksList />} />
-          <Route path="history" element={<HistoryList />} />
+      <PluginProvider>
+        <Routes>
+          {/* Standalone B2B External AI Plugin Console (Decoupled from BankDesk Host Layout) */}
+          <Route path="/plugin" element={<PluginStandalonePage />} />
+          <Route path="/plugin/:id" element={<PluginStandalonePage />} />
 
-          {/* Legacy Romanian redirects */}
-          <Route path="dosare" element={<Navigate to="/cases" replace />} />
-          <Route path="dosare/:id" element={<CasesListWrapper />} />
-          <Route path="clienti" element={<Navigate to="/clients" replace />} />
-          <Route path="documente" element={<Navigate to="/documents" replace />} />
-          <Route path="sarcini" element={<Navigate to="/tasks" replace />} />
-          <Route path="istoric" element={<Navigate to="/history" replace />} />
+          {/* BankDesk Core Banking Host Application */}
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            {/* Primary English routes */}
+            <Route path="cases" element={<CasesList />} />
+            <Route path="cases/:id" element={<CaseDetail />} />
+            <Route path="clients" element={<ClientsList />} />
+            <Route path="clients/:id/finances" element={<ClientFinancialProfile />} />
+            <Route path="documents" element={<DocumentsList />} />
+            <Route path="tasks" element={<TasksList />} />
+            <Route path="history" element={<HistoryList />} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+            {/* Legacy Romanian redirects */}
+            <Route path="dosare" element={<Navigate to="/cases" replace />} />
+            <Route path="dosare/:id" element={<CasesListWrapper />} />
+            <Route path="clienti" element={<Navigate to="/clients" replace />} />
+            <Route path="documente" element={<Navigate to="/documents" replace />} />
+            <Route path="sarcini" element={<Navigate to="/tasks" replace />} />
+            <Route path="istoric" element={<Navigate to="/history" replace />} />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </PluginProvider>
     </BrowserRouter>
   );
 }

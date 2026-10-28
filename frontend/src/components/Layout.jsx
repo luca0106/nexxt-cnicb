@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import { Outlet } from 'react-router-dom';
+import PluginIntegrationModal from '../plugin/PluginIntegrationModal';
 
 export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -31,6 +32,7 @@ export default function Layout() {
           </footer>
         </main>
       </div>
+      <PluginIntegrationModal />
     </div>
   );
 }

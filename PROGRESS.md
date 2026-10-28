@@ -21,6 +21,11 @@ Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă �
      - Toate citările pe documente (din pilonul 2 `salaryInflows`, matricea în 3 direcții din pilonul 3 `reconciliationMatrix`, `findings` și tab-ul `GDPR & OCR`) deschid și evidențiază linia exactă în preview-ul inline și în viewer-ul de documente al dosarului.
      - Butoanele `Validate & Apply` și `Mark as Verified by Officer` actualizează sincronizat atât `findings`, cât și `modularResults`, recalculând DTI-ul în Python și matricea de reconciliere.
      - Tab-ul `Customer Outreach` folosește un composer interactiv de **Clarification Email** (destinatar, subiect și corp editabile, trimitere/logare în Audit Trail + SMTP opțional și deschidere în aplicația de e-mail prin `mailto:`), eliminând elementele mockuite nefolosite (SMS fals, link fictiv de upload).
+  6. **Arhitectură decuplată de Plugin B2B Extern (`frontend/src/plugin/`, `/plugin`, `/api/plugin/manifest`)**:
+     - Plugin-ul AI este decuplat într-un modul extern vandabil B2B (`PluginContext.jsx`, `PluginIntegrationModal.jsx`, `PluginStandalonePage.jsx`).
+     - Include comutator live `External AI Plugin: Connected / Disconnected (Pure CRM)` în header și în pagina de dosar pentru a demonstra `BankDesk` ca aplicație bancară clasică independentă și conectarea instantanee a plugin-ului AI.
+     - Rută dedicată `/plugin` și `/plugin/:id` care deschide consola B2B standalone a plugin-ului în afara layout-ului `BankDesk`, sincronizată prin REST API cu dosarele host-ului.
+     - Modal de arhitectură B2B, snippet SDK (`FinSightPlugin.mount(...)`) și contract REST API (`/api/plugin/manifest`).
 
 ## Date demo
 
@@ -28,7 +33,7 @@ La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit
 
 ## Verificări efectuate
 
-- Cele 10 teste din `backend/tests/` (`test_financial_profiles.py` și `test_agentic.py`) au trecut.
+- Cele 11 teste din `backend/tests/` (`test_financial_profiles.py` și `test_agentic.py`) au trecut.
 - `npm run build` a trecut după actualizarea UI-ului AI Copilot și rezolvarea tuturor referințelor de la butoane.
 - Endpoint-urile `/api/cases/{id}/analysis` și `/api/cases/{id}/agents/{agent_id}/run` au fost verificate live cu AWS Bedrock (`Amazon Nova Pro`).
 - Toate profilurile locale au trecut validarea `FinancialProfileOut`; nu existau clienți fără profil.

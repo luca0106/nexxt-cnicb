@@ -21,7 +21,7 @@ import {
   Building,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle, ExternalLink, Code2, Power
 } from 'lucide-react';
 import {
   fetchCaseById,
@@ -32,6 +32,7 @@ import {
   createDocument
 } from '../api/client';
 import AICopilotDrawer from '../components/AICopilotDrawer';
+import { useExternalPlugin } from '../plugin/PluginContext';
 
 // Standard banking annuity formula
 const calculateMonthlyAnnuity = (principal, annualInterestRate, termMonths) => {
@@ -46,6 +47,7 @@ export default function CaseDetail() {
   const navigate = useNavigate();
   const outletContext = useOutletContext() || {};
   const { setIsSidebarCollapsed } = outletContext;
+  const { isPluginConnected, setIsPluginConnected, setIsIntegrationModalOpen } = useExternalPlugin();
 
   const copilotContainerRef = useRef(null);
 
@@ -277,7 +279,7 @@ export default function CaseDetail() {
     ? new Date(caseData.client.id_card_expiry) < new Date()
     : false;
 
-  const isSplitDesktop = isCopilotOpen && copilotViewMode === 'split';
+  const isSplitDesktop = isPluginConnected && isCopilotOpen && copilotViewMode === 'split';
 
   return (
     <div className="space-y-5 w-full min-w-0">
@@ -351,11 +353,47 @@ export default function CaseDetail() {
             </select>
           </div>
 
-          {/* Plugin Copilot Trigger Button (Decoupled as external tool) */}
+          {/* Plugin Copilot Trigger Button (Decoupled as external B2B tool) */}
+          {!isPluginConnected && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-400 font-medium">
+                Pure Banking Mode (External AI Plugin Disconnected)
+              </span>
+              <button
+                onClick={() => {
+                  setIsPluginConnected(true);
+                  setIsCopilotOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>Connect External AI Plugin</span>
+              </button>
+            </div>
+          )}
+          {isPluginConnected && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => navigate(`/plugin/${caseData.id}`)}
+                title="Open in Standalone B2B Plugin Console (Decoupled External Product View)"
+                className="px-3 py-2.5 rounded-xl bg-[#0e172a] hover:bg-[#162442] border border-amber-400/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Standalone Plugin</span>
+              </button>
+              <button
+                onClick={() => setIsIntegrationModalOpen(true)}
+                title="View External Plugin SDK & REST API Spec"
+                className="p-2.5 rounded-xl bg-[#0e172a] hover:bg-[#162442] border border-[#22365e] text-blue-300 transition-colors cursor-pointer"
+              >
+                <Code2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button
             onClick={handleOpenCopilot}
             title="Open multi-agent AI assistant for triage, cross-checking and audit support"
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg cursor-pointer active:scale-95 ${
+            className={`${!isPluginConnected ? 'hidden' : 'flex'} px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm items-center gap-2 transition-all shadow-lg cursor-pointer active:scale-95 ${
               isCopilotOpen
                 ? 'bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-amber-400/10'
                 : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-amber-500/20'
@@ -370,7 +408,7 @@ export default function CaseDetail() {
       {/* Main Responsive Grid: BankDesk Native Interface + AI Copilot Drawer */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* If Copilot is in EXPANDED mode, render across full width at top */}
-        {isCopilotOpen && copilotViewMode === 'expanded' && (
+        {isPluginConnected && isCopilotOpen && copilotViewMode === 'expanded' && (
           <div ref={copilotContainerRef} className="xl:col-span-12 w-full min-w-0">
             <AICopilotDrawer
               isOpen={isCopilotOpen}
@@ -1095,7 +1133,7 @@ export default function CaseDetail() {
         </div>
 
         {/* RIGHT PANE (WHEN IN SPLIT MODE): RAIFFEISEN AI COPILOT EXTENSION */}
-        {isCopilotOpen && copilotViewMode === 'split' && (
+        {isPluginConnected && isCopilotOpen && copilotViewMode === 'split' && (
           <div ref={copilotContainerRef} className="xl:col-span-6 w-full min-w-0 xl:sticky xl:top-[84px]">
             <AICopilotDrawer
               isOpen={isCopilotOpen}

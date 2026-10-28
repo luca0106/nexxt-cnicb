@@ -81,6 +81,56 @@ def _find_case(db: Session, case_id: int) -> Case:
     return c
 
 
+@router.get("/plugin/manifest")
+def get_external_plugin_manifest(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Returns the B2B External Plugin manifest, integration contract, and live telemetry
+    demonstrating that the AI Copilot operates as a decoupled, sellable SaaS/on-prem plugin.
+    """
+    total_cases = db.query(Case).count()
+    total_analyses = db.query(AIAnalysis).count()
+    return {
+        "pluginId": "raiffeisen-ai-underwriting-copilot",
+        "productName": "FinSight AI Copilot — External Banking Plugin",
+        "version": "2.4.0-enterprise",
+        "deliveryModel": "B2B SaaS / On-Premise Docker Sidecar & JS SDK",
+        "hostIntegration": {
+            "connectedHost": "BankDesk Core Banking CRM",
+            "protocol": "REST API + Webhook Events (JSON)",
+            "authMode": "Bearer API Key + mTLS",
+            "gdprBoundary": "Local Pre-Flight PII Tokenization (Zero Raw PII to Cloud LLM)",
+        },
+        "engines": {
+            "primaryLlm": "AWS Bedrock (Claude / Amazon Nova Pro)",
+            "mathEngine": "Deterministic Python Financial Verifier (Zero-Hallucination)",
+            "agentOrchestrator": "LangGraph + 3-Pillar Modular Verification Engine",
+        },
+        "pillars": [
+            {
+                "id": a["agentId"],
+                "name": a["name"],
+                "shortLabel": a["shortLabel"],
+                "description": a["description"],
+            }
+            for a in AGENT_CATALOG
+        ],
+        "endpoints": [
+            {"method": "GET", "path": "/api/plugin/manifest", "purpose": "Plugin capabilities & health handshake"},
+            {"method": "GET", "path": "/api/cases/{caseId}/agents", "purpose": "Fetch 3-pillar catalog & status"},
+            {"method": "POST", "path": "/api/cases/{caseId}/analysis", "purpose": "Run full 3-pillar + 360° executive audit"},
+            {"method": "POST", "path": "/api/cases/{caseId}/agents/{agentId}/run", "purpose": "Run single modular pillar on demand"},
+            {"method": "PATCH", "path": "/api/analyses/{analysisId}/findings/{findingId}", "purpose": "Human-in-the-Loop override & DTI recalculation"},
+            {"method": "POST", "path": "/api/analyses/{analysisId}/remediation/send", "purpose": "Dispatch & log applicant clarification email"},
+            {"method": "POST", "path": "/api/analyses/{analysisId}/human-decision", "purpose": "Record final officer underwriting sign-off"},
+        ],
+        "telemetry": {
+            "hostDossiersSynced": total_cases,
+            "aiAuditsCompleted": total_analyses,
+            "status": "connected",
+        },
+    }
+
+
 @router.get("/cases/{case_id}/agents")
 def list_case_modular_agents(case_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """

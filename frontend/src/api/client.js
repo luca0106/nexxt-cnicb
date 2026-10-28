@@ -113,6 +113,12 @@ export async function fetchHistory(caseId = null) {
 // RAIFFEISEN AI COPILOT (MULTI-AGENT EXTENSION) API CALLS
 // =========================================================
 
+export async function fetchPluginManifest() {
+  const res = await fetch(`${API_BASE}/plugin/manifest`);
+  if (!res.ok) throw new Error('Failed to load external plugin manifest');
+  return res.json();
+}
+
 export async function fetchCaseAgents(caseId) {
   const res = await fetch(`${API_BASE}/cases/${caseId}/agents`);
   if (!res.ok) throw new Error('Failed to load modular AI agent catalog');

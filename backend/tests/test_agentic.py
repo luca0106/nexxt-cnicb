@@ -144,6 +144,14 @@ class AgenticReviewTest(unittest.TestCase):
             self.assertEqual(email_resp.remediation["emailSubject"], "Case #10482 Clarification")
             self.assertEqual(email_resp.remediation["emailBody"], "Dear John, please confirm your legal name.")
 
+    def test_external_plugin_manifest(self):
+        from app.routers.ai_copilot import get_external_plugin_manifest
+        manifest = get_external_plugin_manifest(db=self.db)
+        self.assertEqual(manifest["pluginId"], "raiffeisen-ai-underwriting-copilot")
+        self.assertEqual(manifest["deliveryModel"], "B2B SaaS / On-Premise Docker Sidecar & JS SDK")
+        self.assertEqual(len(manifest["pillars"]), 3)
+        self.assertTrue(manifest["telemetry"]["hostDossiersSynced"] >= 1)
+
 
 if __name__ == "__main__":
     unittest.main()
