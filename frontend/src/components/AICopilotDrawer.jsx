@@ -33,29 +33,29 @@ const AGENT_PIPELINE_STEPS = [
   {
     id: 'pii',
     name: '1. PII Shield (GDPR)',
-    desc: 'Pseudonimizare CNP, CI, IBAN',
+    desc: 'National ID & IBAN Masking',
   },
   {
     id: 'extract_policy',
     name: '2. Extractor ∥ Policy',
-    desc: 'OCR JSON + Norme BNR',
+    desc: 'OCR JSON + Regulatory Rules',
   },
   {
     id: 'investigator',
     name: '3. Investigator & Math',
-    desc: 'Cross-check + DTI Python 40%',
+    desc: 'Cross-Check + DTI 40% Python',
   },
   {
     id: 'remediation',
-    name: '4. Remedieri & Audit',
-    desc: 'Email/SMS client & Checklist',
+    name: '4. Remediation Agent',
+    desc: 'Automated SMS/Email & Checklist',
   },
 ];
 
 export default function AICopilotDrawer({
   isOpen,
   onClose,
-  viewMode = 'split', // 'split' | 'expanded'
+  viewMode = 'split',
   onToggleViewMode,
   caseData,
   initialAnalysis,
@@ -107,10 +107,10 @@ export default function AICopilotDrawer({
       setAnalysis(res);
       setActivePipelineStep(4);
       if (onAnalysisUpdated) onAnalysisUpdated(res);
-      showToast('Analiza Multi-Agentică a fost finalizată cu succes!');
+      showToast('Multi-Agent Analysis successfully completed!');
     } catch (err) {
       console.error(err);
-      showToast('Eroare la rularea analizei AI.');
+      showToast('Error executing AI analysis.');
     } finally {
       setRunning(false);
     }
@@ -128,8 +128,8 @@ export default function AICopilotDrawer({
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
       showToast(
         resolvedValue !== null
-          ? `Valoarea "${resolvedValue}" a fost aplicată în dosar și DTI-ul a fost recalculat în Python!`
-          : 'Constatarea a fost actualizată în Audit Trail!'
+          ? `Value "${resolvedValue}" applied to case and DTI recalculated in Python!`
+          : 'Finding updated in audit trail!'
       );
     } catch (err) {
       console.error(err);
@@ -147,7 +147,7 @@ export default function AICopilotDrawer({
       });
       setAnalysis(updated);
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
-      showToast('SMS și Email cu link securizat de reîncărcare trimise către client!');
+      showToast('SMS and Email with secure re-upload link dispatched to customer!');
     } catch (err) {
       console.error(err);
     } finally {
@@ -167,11 +167,11 @@ export default function AICopilotDrawer({
       setAnalysis(updated);
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
       const labels = {
-        approve: 'Dosar APROBAT de ofițer (Human-in-the-Loop)!',
-        request_clarification: 'Dosar trecut în AȘTEPTARE CLARIFICĂRI!',
-        reject: 'Dosar RESPINS de ofițer!',
+        approve: 'Case APPROVED by loan officer (Human-in-the-Loop)!',
+        request_clarification: 'Case transitioned to PENDING CLARIFICATION!',
+        reject: 'Case REJECTED by loan officer!',
       };
-      showToast(labels[decision] || 'Decizie înregistrată!');
+      showToast(labels[decision] || 'Decision recorded!');
     } catch (err) {
       console.error(err);
     } finally {
@@ -183,7 +183,6 @@ export default function AICopilotDrawer({
     if (onSelectCitation) {
       onSelectCitation(documentId, lineNumber, quote);
     }
-    // Also show inline preview if on mobile/tablet or expanded mode
     const foundDoc = caseData?.documents?.find((d) => d.id === documentId);
     if (foundDoc) {
       setInlinePreviewDoc({
@@ -216,16 +215,15 @@ export default function AICopilotDrawer({
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
-              <span>Dosar #{caseData?.case_number}</span>
+              <span>Case #{caseData?.case_number}</span>
               <span>•</span>
               <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                <Lock className="w-3 h-3" /> Scut GDPR PII Activ
+                <Lock className="w-3 h-3" /> GDPR PII Shield Active
               </span>
             </p>
           </div>
         </div>
 
-        {/* Action & View Mode Controls */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleRunAIReview}
@@ -233,19 +231,19 @@ export default function AICopilotDrawer({
             className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
           >
             <Play className={`w-3.5 h-3.5 fill-slate-950 ${running ? 'animate-pulse' : ''}`} />
-            <span>{running ? 'Rulează Agenții...' : (analysis ? 'Re-rulează AI Review' : 'Run AI Review')}</span>
+            <span>{running ? 'Agents Running...' : (analysis ? 'Re-run AI Review' : 'Run AI Review')}</span>
           </button>
 
           {onToggleViewMode && (
             <button
               onClick={onToggleViewMode}
-              className="hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-[#24375e] text-xs font-medium text-slate-200 transition-colors"
-              title={viewMode === 'split' ? 'Extinde Copilotul pe toată lățimea paginii' : 'Afișează în paralel cu documentele (Split-View)'}
+              className="hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-[#24375e] text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+              title={viewMode === 'split' ? 'Expand Copilot to Full Width' : 'Dock Copilot Side-by-Side (Split-View)'}
             >
               {viewMode === 'split' ? (
                 <>
                   <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Extinde</span>
+                  <span>Expand</span>
                 </>
               ) : (
                 <>
@@ -258,31 +256,30 @@ export default function AICopilotDrawer({
 
           <button
             onClick={() => setShowEngineConfig(!showEngineConfig)}
-            className="p-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-[#24375e] text-slate-300 hover:text-white transition-colors"
-            title="Configurare Motor AI / Cheie LLM"
+            className="p-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-[#24375e] text-slate-300 hover:text-white transition-colors cursor-pointer"
+            title="Configure AI Engine / API Keys"
           >
             <Settings className="w-4 h-4" />
           </button>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-[#091020] hover:bg-red-950/60 border border-[#24375e] hover:border-red-500/40 text-slate-300 hover:text-white transition-colors"
-            title="Închide extensia AI Copilot"
+            className="p-2 rounded-xl bg-[#091020] hover:bg-red-950/60 border border-[#24375e] hover:border-red-500/40 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            title="Close AI Copilot Extension"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Optional Engine Configuration Bar */}
       {showEngineConfig && (
         <div className="px-5 py-3.5 bg-[#050914] border-b border-[#192742] text-xs space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-semibold text-slate-200">
-              Configurare Motor Multi-Agent (Hibrid LLM + Determinist):
+              Multi-Agent Engine Configuration (Hybrid LLM + Deterministic):
             </span>
             <span className="text-[11px] text-emerald-400 font-mono">
-              ✓ Fallback Determinist Activ (100% Uptime)
+              ✓ Deterministic Fallback Active (100% Uptime)
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -291,23 +288,22 @@ export default function AICopilotDrawer({
               onChange={(e) => setLlmProvider(e.target.value)}
               className="bg-[#0b1325] border border-[#1e3052] rounded-xl px-3 py-2 text-xs text-white"
             >
-              <option value="auto">Auto (Hibrid LLM / Determinist)</option>
+              <option value="auto">Auto (Hybrid LLM / Deterministic)</option>
               <option value="openai">OpenAI GPT-4o + Python Math</option>
               <option value="gemini">Google Gemini 2.0 + Python Math</option>
-              <option value="deterministic">Strict Determinist (Offline Demo)</option>
+              <option value="deterministic">Strict Deterministic (Offline Mode)</option>
             </select>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Opțional: Cheie API (OpenAI / Gemini)..."
+              placeholder="Optional: API Key (OpenAI / Gemini)..."
               className="sm:col-span-2 bg-[#0b1325] border border-[#1e3052] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500"
             />
           </div>
         </div>
       )}
 
-      {/* Toast Feedback Banner */}
       {toastMsg && (
         <div className="mx-5 mt-4 px-4 py-3 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm font-medium flex items-center gap-2.5 shadow-lg">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -315,7 +311,6 @@ export default function AICopilotDrawer({
         </div>
       )}
 
-      {/* Agent Pipeline Steps Bar */}
       {(running || analysis) && (
         <div className="px-4 sm:px-6 py-3 bg-[#091224] border-b border-[#162440]">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -351,7 +346,6 @@ export default function AICopilotDrawer({
         </div>
       )}
 
-      {/* Main Content Area */}
       {!analysis && !running ? (
         <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-5 min-h-[380px]">
           <div className="w-16 h-16 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
@@ -359,11 +353,11 @@ export default function AICopilotDrawer({
           </div>
           <div className="max-w-lg space-y-2">
             <h3 className="text-lg font-bold text-white">
-              Copilotul AI este pregătit pentru Dosarul #{caseData?.case_number}
+              AI Copilot is Ready for Case #{caseData?.case_number}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Apasă butonul <strong>„Run AI Review”</strong> pentru a porni în cascadă și paralel echipa de agenți:
-              <strong> PII Shield (GDPR)</strong> → <strong>Agent Extractor (OCR)</strong> ∥ <strong>Policy Agent</strong> → <strong>Agent Investigator & Calcul Python</strong> → <strong>Agent Remedieri</strong>.
+              Press <strong>"Run AI Review"</strong> above to trigger the multi-agent team:
+              <strong> PII Shield (GDPR)</strong> → <strong>Extraction Agent (OCR)</strong> ∥ <strong>Policy Agent</strong> → <strong>Investigator Agent & Python Math</strong> → <strong>Remediation Agent</strong>.
             </p>
           </div>
           <button
@@ -371,7 +365,7 @@ export default function AICopilotDrawer({
             className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-xl shadow-amber-500/20 transition-all cursor-pointer"
           >
             <Play className="w-4 h-4 fill-slate-950" />
-            <span>Pornește Analiza Multi-Agentică (Run AI Review)</span>
+            <span>Launch Multi-Agent Triage (Run AI Review)</span>
           </button>
         </div>
       ) : running ? (
@@ -379,7 +373,7 @@ export default function AICopilotDrawer({
           <div className="w-12 h-12 rounded-full border-3 border-amber-400 border-t-transparent animate-spin" />
           <div className="space-y-1">
             <p className="text-base font-bold text-white">
-              {AGENT_PIPELINE_STEPS[Math.min(activePipelineStep, 3)]?.name || 'Procesare...'}
+              {AGENT_PIPELINE_STEPS[Math.min(activePipelineStep, 3)]?.name || 'Processing...'}
             </p>
             <p className="text-xs sm:text-sm text-slate-400">
               {AGENT_PIPELINE_STEPS[Math.min(activePipelineStep, 3)]?.desc}
@@ -388,19 +382,18 @@ export default function AICopilotDrawer({
         </div>
       ) : (
         <div className="flex flex-col">
-          {/* Executive Summary Banner */}
           <div className="px-4 sm:px-6 py-3.5 bg-[#0b1528] border-b border-[#192947] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
               <div
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider shrink-0 mt-0.5 ${
-                  analysis.riskScore === 'critic'
+                  analysis.riskScore === 'critical'
                     ? 'bg-red-950 text-red-400 border border-red-800'
-                    : analysis.riskScore === 'mediu'
+                    : analysis.riskScore === 'medium'
                     ? 'bg-amber-950 text-amber-400 border border-amber-800'
                     : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                 }`}
               >
-                Risc {analysis.riskScore}
+                {analysis.riskScore} Risk
               </div>
               <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
                 {analysis.summary}
@@ -413,21 +406,20 @@ export default function AICopilotDrawer({
             </div>
           </div>
 
-          {/* Inline Document Preview Box (Shown when clicking a citation on smaller screens or for instant verification) */}
           {inlinePreviewDoc && (
             <div className="mx-4 sm:mx-6 mt-4 p-4 rounded-2xl bg-[#050914] border-2 border-amber-400/60 shadow-xl space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
                   <FileText className="w-4 h-4 shrink-0" />
-                  <span>Fragment Sursă: {inlinePreviewDoc.doc.file_name}</span>
+                  <span>Source Excerpt: {inlinePreviewDoc.doc.file_name}</span>
                   <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-mono text-xs">
-                    Rândul {inlinePreviewDoc.lineNumber}
+                    Line {inlinePreviewDoc.lineNumber}
                   </span>
                 </div>
                 <button
                   onClick={() => setInlinePreviewDoc(null)}
-                  className="text-slate-400 hover:text-white p-1"
-                  title="Închide previzualizarea rapidă"
+                  className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                  title="Close inline preview"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -454,7 +446,6 @@ export default function AICopilotDrawer({
             </div>
           )}
 
-          {/* Navigation Tabs inside Copilot */}
           <div className="px-4 sm:px-6 pt-3 bg-[#070d1b] border-b border-[#16233d] flex items-center gap-1.5 overflow-x-auto">
             <button
               onClick={() => setActiveTab('findings')}
@@ -465,7 +456,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <AlertTriangle className="w-4 h-4" />
-              <span>Audit & Constatări</span>
+              <span>Audit & Findings</span>
               {redFlags.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-300 border border-red-500/40 font-bold">
                   {redFlags.length}
@@ -482,7 +473,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <Calculator className="w-4 h-4" />
-              <span>Calcul Python ({analysis.feasibilityMath?.dti_percentage}%)</span>
+              <span>Python Math ({analysis.feasibilityMath?.dti_percentage}%)</span>
             </button>
 
             <button
@@ -494,7 +485,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <Send className="w-4 h-4" />
-              <span>Remediere Client</span>
+              <span>Customer Remediation</span>
               {analysis.remediation?.required && (
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
               )}
@@ -509,7 +500,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Date & GDPR</span>
+              <span>Data & GDPR</span>
             </button>
 
             <button
@@ -521,21 +512,20 @@ export default function AICopilotDrawer({
               }`}
             >
               <Activity className="w-4 h-4" />
-              <span>Trace & Norme</span>
+              <span>Trace & Rules</span>
             </button>
           </div>
 
-          {/* Spacious Tab Body (No squashed height!) */}
           <div className="p-4 sm:p-6 space-y-4">
             {/* TAB 1: AUDIT & FINDINGS */}
             {activeTab === 'findings' && (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-slate-400">
                   <span>
-                    Apasă pe orice <strong>citat-sursă</strong> pentru a evidenția automat rândul în document.
+                    Click any <strong>source citation</strong> to automatically highlight the corresponding line in the document.
                   </span>
                   <span className="font-mono text-xs text-slate-300 font-semibold">
-                    {redFlags.length} Alerte (Red Flags) • {greenFlags.length} Validări (Green Flags)
+                    {redFlags.length} Red Flags (Alerts) • {greenFlags.length} Green Flags (Validated)
                   </span>
                 </div>
 
@@ -561,7 +551,7 @@ export default function AICopilotDrawer({
                             </span>
                             {isResolved && (
                               <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
-                                ✓ Revizuit de Ofițer {f.resolvedValue ? `(${f.resolvedValue})` : ''}
+                                ✓ Reviewed by Officer {f.resolvedValue ? `(${f.resolvedValue})` : ''}
                               </span>
                             )}
                           </div>
@@ -575,11 +565,10 @@ export default function AICopilotDrawer({
                         {f.description}
                       </p>
 
-                      {/* Source Citations */}
                       {f.values && f.values.length > 0 && (
                         <div className="space-y-2 pt-1">
                           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                            Dovezi & Citări Exacte la Sursă (Audit Trail BNR):
+                            Evidence & Source Citations (Regulatory Audit Trail):
                           </span>
                           <div className="grid grid-cols-1 gap-2">
                             {f.values.map((v, i) => (
@@ -593,7 +582,7 @@ export default function AICopilotDrawer({
                                     <FileText className="w-4 h-4 shrink-0" />
                                     <span className="truncate">{v.documentName}</span>
                                     <span className="px-2 py-0.5 rounded bg-amber-400/15 text-amber-300 font-mono text-xs shrink-0">
-                                      Rândul {v.lineNumber}
+                                      Line {v.lineNumber}
                                     </span>
                                   </div>
                                   <p className="text-xs text-slate-300 font-mono mt-1.5 break-words">
@@ -605,7 +594,7 @@ export default function AICopilotDrawer({
                                     {v.formattedValue || v.value}
                                   </span>
                                   <span className="text-xs text-amber-400 flex items-center gap-1 mt-0.5">
-                                    Evidențiază rândul <ExternalLink className="w-3 h-3" />
+                                    Inspect line <ExternalLink className="w-3 h-3" />
                                   </span>
                                 </div>
                               </button>
@@ -614,11 +603,10 @@ export default function AICopilotDrawer({
                         </div>
                       )}
 
-                      {/* Human-in-the-Loop Action Buttons */}
                       {isRed && (
                         <div className="pt-3 border-t border-white/10 space-y-2.5">
                           <div className="text-xs sm:text-sm text-amber-300 font-medium">
-                            💡 Recomandare: {f.suggestedAction}
+                            💡 Recommendation: {f.suggestedAction}
                           </div>
                           <div className="flex flex-wrap items-center gap-2.5">
                             {f.selectableValues && f.selectableValues.length > 0 ? (
@@ -635,8 +623,8 @@ export default function AICopilotDrawer({
                                 >
                                   <Check className="w-4 h-4" />
                                   <span>
-                                    Validează & Aplică:{' '}
-                                    {typeof val === 'number' ? `${val.toLocaleString('ro-RO')} RON` : val}
+                                    Validate & Apply:{' '}
+                                    {typeof val === 'number' ? `€${val.toLocaleString('en-US')}` : val}
                                   </span>
                                 </button>
                               ))
@@ -647,7 +635,7 @@ export default function AICopilotDrawer({
                               onClick={() => handleResolveFinding(f.id, 'confirm')}
                               className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
                             >
-                              Confirmă constatarea
+                              Confirm Finding
                             </button>
                           </div>
                         </div>
@@ -658,47 +646,45 @@ export default function AICopilotDrawer({
               </div>
             )}
 
-            {/* TAB 2: DETERMINISTIC PYTHON FINANCIAL MATH */}
+            {/* TAB 2: PYTHON FINANCIAL MATH */}
             {activeTab === 'math' && analysis.feasibilityMath && (
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-[#0c162c] border border-blue-500/30 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
                       <Calculator className="w-4 h-4" />
-                      Motor Matematic Determinist Python (Zero Risc Halucinație LLM)
+                      Deterministic Python Financial Engine (Zero LLM Hallucination Risk)
                     </span>
                     <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-                      NORMA-BNR-DTI-04
+                      REG-DTI-04
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                    Agenții AI doar extrag valorile din documente, însă <strong>calculul ratei lunare și al gradului de îndatorare este executat strict în cod Python determinist</strong> pentru conformitate bancară 100%.
+                    AI agents only extract figures from documents; <strong>all loan installment and debt-to-income calculations are executed strictly in deterministic Python code</strong> for 100% regulatory compliance.
                   </p>
                   <div className="p-3 rounded-xl bg-[#060b16] border border-[#192947] font-mono text-xs text-amber-300 break-words">
                     {analysis.feasibilityMath.formula_used}
                   </div>
                 </div>
 
-                {/* DTI Gauge Card */}
                 <div className="p-5 rounded-2xl bg-[#0a1224] border border-[#192846] space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs sm:text-sm text-slate-400 block">
-                        Grad de Îndatorare Calculat (DTI)
+                        Calculated Debt-to-Income (DTI)
                       </span>
                       <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400">
                         {analysis.feasibilityMath.dti_percentage}%
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-xs sm:text-sm text-slate-400 block">Plafon Maxim BNR</span>
+                      <span className="text-xs sm:text-sm text-slate-400 block">Regulatory DTI Ceiling</span>
                       <span className="text-2xl font-bold text-slate-200">
                         {analysis.feasibilityMath.max_dti_limit_percent}%
                       </span>
                     </div>
                   </div>
 
-                  {/* Progress Bar */}
                   <div className="w-full h-3.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden relative">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
@@ -711,41 +697,41 @@ export default function AICopilotDrawer({
                     <div
                       className="absolute top-0 bottom-0 w-0.5 bg-amber-400"
                       style={{ left: '40%' }}
-                      title="Prag Maxim BNR 40%"
+                      title="Regulatory Ceiling: 40%"
                     />
                   </div>
                   <div className="flex justify-between text-xs text-slate-400 font-mono">
                     <span>0%</span>
-                    <span className="text-amber-400 font-semibold">Limita BNR: 40%</span>
+                    <span className="text-amber-400 font-semibold">Regulatory Limit: 40%</span>
                     <span>100%</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[#16233d] text-xs sm:text-sm">
                     <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#142038]">
-                      <span className="text-slate-400 text-xs block">Credit Solicitat</span>
+                      <span className="text-slate-400 text-xs block">Requested Loan</span>
                       <span className="font-bold text-white text-base">
-                        {analysis.feasibilityMath.requested_amount_ron?.toLocaleString('ro-RO')} RON
+                        €{analysis.feasibilityMath.requested_amount?.toLocaleString('en-US')}
                       </span>
                       <span className="text-xs text-slate-500 block mt-0.5">
-                        pe {analysis.feasibilityMath.loan_term_months} luni ({analysis.feasibilityMath.annual_interest_rate_percent}%/an)
+                        over {analysis.feasibilityMath.loan_term_months} months ({analysis.feasibilityMath.annual_interest_rate_percent}%/yr)
                       </span>
                     </div>
                     <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#142038]">
-                      <span className="text-slate-400 text-xs block">Rată Lunară Nouă</span>
+                      <span className="text-slate-400 text-xs block">Monthly Installment</span>
                       <span className="font-bold text-blue-400 text-base">
-                        {analysis.feasibilityMath.calculated_monthly_installment_ron} RON
+                        €{analysis.feasibilityMath.calculated_monthly_installment}
                       </span>
                       <span className="text-xs text-slate-500 block mt-0.5">
-                        + {analysis.feasibilityMath.existing_monthly_debts_ron} RON rate existente
+                        + €{analysis.feasibilityMath.existing_monthly_debts} existing obligations
                       </span>
                     </div>
                     <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#142038]">
-                      <span className="text-slate-400 text-xs block">Venit Net Luat în Calcul</span>
+                      <span className="text-slate-400 text-xs block">Eligible Monthly Income</span>
                       <span className="font-bold text-emerald-400 text-base">
-                        {analysis.feasibilityMath.monthly_income_used_ron?.toLocaleString('ro-RO')} RON
+                        €{analysis.feasibilityMath.monthly_income_used?.toLocaleString('en-US')}
                       </span>
                       <span className="text-xs text-slate-500 block mt-0.5">
-                        Rată max admisă: {analysis.feasibilityMath.max_allowed_installment_ron} RON
+                        Max allowable installment: €{analysis.feasibilityMath.max_allowed_installment}
                       </span>
                     </div>
                   </div>
@@ -753,19 +739,19 @@ export default function AICopilotDrawer({
                   {analysis.feasibilityMath.alternative_income_scenario && (
                     <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs sm:text-sm space-y-2">
                       <div className="font-semibold text-amber-300">
-                        Simulare Comparativă pe Cele 2 Venituri din Documente:
+                        Comparative Assessment Across Both Extracted Incomes:
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                         <div className="p-2.5 rounded-lg bg-[#060b16]">
-                          <span className="text-slate-400 block">Pe venitul din Cerere (5.200 RON):</span>
+                          <span className="text-slate-400 block">Application Form Income (€5,200):</span>
                           <strong className="text-white text-sm">
-                            DTI = {analysis.feasibilityMath.alternative_income_scenario.declared_dti_percent}% (Eligibil)
+                            DTI = {analysis.feasibilityMath.alternative_income_scenario.declared_dti_percent}% (Eligible)
                           </strong>
                         </div>
                         <div className="p-2.5 rounded-lg bg-[#060b16]">
-                          <span className="text-slate-400 block">Pe venitul din Adeverință (5.700 RON):</span>
+                          <span className="text-slate-400 block">Employer Certificate Income (€5,700):</span>
                           <strong className="text-emerald-400 text-sm">
-                            DTI = {analysis.feasibilityMath.alternative_income_scenario.verified_dti_percent}% (Eligibil)
+                            DTI = {analysis.feasibilityMath.alternative_income_scenario.verified_dti_percent}% (Eligible)
                           </strong>
                         </div>
                       </div>
@@ -782,7 +768,7 @@ export default function AICopilotDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
                       <Send className="w-4 h-4" />
-                      Agentul de Remedieri (Automatizare Comunicare Client)
+                      Remediation Agent (Customer Communication Automation)
                     </span>
                     <span
                       className={`text-xs font-semibold px-3 py-1 rounded-full ${
@@ -795,17 +781,17 @@ export default function AICopilotDrawer({
                       }`}
                     >
                       {analysis.remediation.status === 'sent_automatically'
-                        ? '✓ Trimis Automat la Triaj'
+                        ? '✓ Auto-Dispatched at Triage'
                         : analysis.remediation.status === 'sent_by_officer'
-                        ? '✓ Trimis Către Client'
+                        ? '✓ Dispatched to Customer'
                         : analysis.remediation.required
-                        ? 'Pregătit pentru Trimitere'
-                        : 'Nu este necesar'}
+                        ? 'Ready for Dispatch'
+                        : 'Not Required'}
                     </span>
                   </div>
 
                   <p className="text-xs sm:text-sm text-slate-200">
-                    <strong>Motiv declanșare:</strong> {analysis.remediation.triggerReason}
+                    <strong>Trigger Condition:</strong> {analysis.remediation.triggerReason}
                   </p>
                 </div>
 
@@ -815,9 +801,9 @@ export default function AICopilotDrawer({
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
                         <span className="font-semibold text-blue-300 flex items-center gap-2">
                           <MessageSquare className="w-4 h-4" />
-                          Mesaj SMS generat către {analysis.remediation.recipientPhone}
+                          SMS Notification to {analysis.remediation.recipientPhone}
                         </span>
-                        <span className="text-xs text-slate-400">Gateway SMS Raiffeisen</span>
+                        <span className="text-xs text-slate-400">Raiffeisen SMS Gateway</span>
                       </div>
                       <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#15223c] text-xs sm:text-sm text-slate-200 font-mono break-words">
                         {analysis.remediation.smsPreview}
@@ -828,16 +814,16 @@ export default function AICopilotDrawer({
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
                         <span className="font-semibold text-amber-300 flex items-center gap-2">
                           <Mail className="w-4 h-4" />
-                          Email Oficial către {analysis.remediation.recipientEmail}
+                          Official Email to {analysis.remediation.recipientEmail}
                         </span>
                         {analysis.remediation.sentAt && (
                           <span className="text-xs text-emerald-400 font-medium">
-                            Expediat la: {analysis.remediation.sentAt}
+                            Dispatched at: {analysis.remediation.sentAt}
                           </span>
                         )}
                       </div>
                       <div className="text-xs sm:text-sm font-semibold text-white">
-                        Subiect: {analysis.remediation.emailSubject}
+                        Subject: {analysis.remediation.emailSubject}
                       </div>
                       <pre className="p-4 rounded-xl bg-[#060b16] border border-[#15223c] text-xs sm:text-sm text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
                         {analysis.remediation.emailBody}
@@ -853,8 +839,8 @@ export default function AICopilotDrawer({
                       <span>
                         {analysis.remediation.status === 'sent_automatically' ||
                         analysis.remediation.status === 'sent_by_officer'
-                          ? 'Re-trimite Notificarea SMS & Email cu Link Securizat'
-                          : 'Trimite Acum SMS & Email cu Link Securizat către Client'}
+                          ? 'Re-send SMS & Email with Secure Upload Link'
+                          : 'Dispatch SMS & Email with Secure Upload Link Now'}
                       </span>
                     </button>
                   </>
@@ -869,13 +855,13 @@ export default function AICopilotDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
                       <Lock className="w-4 h-4" />
-                      Scut Anonimizare PII (GDPR & Securitate Bancară)
+                      PII Anonymization Shield (GDPR & Banking Secrecy)
                     </span>
                     <button
                       onClick={() => setShowMaskedPii(!showMaskedPii)}
                       className="px-3 py-1.5 rounded-lg bg-[#060b16] border border-emerald-500/40 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/50 cursor-pointer"
                     >
-                      {showMaskedPii ? 'Afișează Date Originale' : 'Afișează Tokeni Anonimizați'}
+                      {showMaskedPii ? 'Show Original Values' : 'Show Masked Tokens'}
                     </button>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
@@ -896,7 +882,7 @@ export default function AICopilotDrawer({
 
                 <div className="space-y-2.5">
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300">
-                    Câmpuri Structurate Extrase de Agentul 1 (OCR & JSON Schema):
+                    Structured Fields Extracted by Agent 1 (OCR & JSON Schema):
                   </h4>
                   <div className="grid grid-cols-1 gap-2">
                     {analysis.extractedFields?.map((item, i) => (
@@ -909,11 +895,11 @@ export default function AICopilotDrawer({
                           <span className="text-slate-400">{item.label}: </span>
                           <strong className="text-white font-semibold">{String(item.value)}</strong>
                           <div className="text-xs text-blue-400 mt-1">
-                            📄 {item.documentName} • Rândul {item.lineNumber}
+                            📄 {item.documentName} • Line {item.lineNumber}
                           </div>
                         </div>
                         <span className="self-start sm:self-center px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-400 font-mono text-xs shrink-0">
-                          {Math.round((item.confidence || 0.99) * 100)}% încredere
+                          {Math.round((item.confidence || 0.99) * 100)}% confidence
                         </span>
                       </div>
                     ))}
@@ -927,7 +913,7 @@ export default function AICopilotDrawer({
               <div className="space-y-5">
                 <div className="space-y-2.5">
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400">
-                    Execution Trace (Trasabilitate Tehnică Orchestrator):
+                    Execution Trace (Technical Audit Trail):
                   </h4>
                   {analysis.executionTrace?.map((step) => (
                     <div
@@ -936,14 +922,14 @@ export default function AICopilotDrawer({
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-bold text-white">
-                          Pasul {step.step}: {step.agent}
+                          Step {step.step}: {step.agent}
                         </span>
                         <span className="font-mono text-xs text-emerald-400">
                           {step.durationMs} ms • {step.status}
                         </span>
                       </div>
                       <div className="text-xs text-blue-300 font-mono">
-                        Tool apelat: {step.tool} ({step.executionMode})
+                        Tool: {step.tool} ({step.executionMode})
                       </div>
                       <p className="text-slate-300">{step.outputSummary}</p>
                     </div>
@@ -952,7 +938,7 @@ export default function AICopilotDrawer({
 
                 <div className="space-y-2.5">
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-400">
-                    Reguli și Proceduri Identificate de Policy Agent:
+                    Banking Rules Identified by Policy Agent:
                   </h4>
                   {analysis.policyRules?.map((rule) => (
                     <div
@@ -974,15 +960,14 @@ export default function AICopilotDrawer({
             )}
           </div>
 
-          {/* Bottom Human-in-the-Loop Decision Panel */}
           <div className="p-4 sm:p-5 bg-[#0a1326] border-t border-[#1e3158] space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                 <UserCheck className="w-4 h-4 text-amber-400" />
-                Decizie Finală Ofițer (Human-in-the-Loop):
+                Final Credit Officer Decision (Human-in-the-Loop):
               </span>
               <span className="text-xs text-slate-400">
-                AI-ul pregătește dosarul • Omul decide
+                AI prepares audit trail • Human takes lending decision
               </span>
             </div>
 
@@ -990,7 +975,7 @@ export default function AICopilotDrawer({
               type="text"
               value={officerComment}
               onChange={(e) => setOfficerComment(e.target.value)}
-              placeholder="Opțional: Adaugă rezoluția sau observația ofițerului pentru Audit BNR..."
+              placeholder="Optional: Enter officer remarks or resolution for regulatory audit..."
               className="w-full bg-[#050811] border border-[#1b2c4e] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
             />
 
@@ -1001,7 +986,7 @@ export default function AICopilotDrawer({
                 className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Aprobă Dosar</span>
+                <span>Approve Case</span>
               </button>
 
               <button
@@ -1010,7 +995,7 @@ export default function AICopilotDrawer({
                 className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
               >
                 <Send className="w-4 h-4" />
-                <span>Solicită Clarificări</span>
+                <span>Request Clarification</span>
               </button>
 
               <button
@@ -1019,7 +1004,7 @@ export default function AICopilotDrawer({
                 className="py-2.5 px-4 rounded-xl bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
-                <span>Respinge Dosar</span>
+                <span>Reject Case</span>
               </button>
             </div>
           </div>

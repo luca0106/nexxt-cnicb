@@ -26,7 +26,7 @@ export default function Layout() {
           </div>
           <footer className="mt-10 pt-5 border-t border-[#121c2e] text-center">
             <p className="text-xs text-slate-500">
-              Mockup conceptual — date și elemente fictive, nu o captură dintr-un sistem bancar real.
+              Conceptual mockup — synthetic demo data, not a real banking production record.
             </p>
           </footer>
         </main>

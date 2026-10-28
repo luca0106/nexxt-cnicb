@@ -2,24 +2,24 @@ const API_BASE = '/api';
 
 export async function fetchStats() {
   const res = await fetch(`${API_BASE}/dashboard/stats`);
-  if (!res.ok) throw new Error('Eroare la încărcarea statisticilor');
+  if (!res.ok) throw new Error('Failed to load dashboard statistics');
   return res.json();
 }
 
 export async function fetchCases(params = {}) {
   const query = new URLSearchParams();
-  if (params.status && params.status !== 'toate') query.append('status', params.status);
+  if (params.status && params.status !== 'all') query.append('status', params.status);
   if (params.search) query.append('search', params.search);
   if (params.limit) query.append('limit', params.limit);
 
   const res = await fetch(`${API_BASE}/cases?${query.toString()}`);
-  if (!res.ok) throw new Error('Eroare la încărcarea dosarelor');
+  if (!res.ok) throw new Error('Failed to load credit cases');
   return res.json();
 }
 
 export async function fetchCaseById(id) {
   const res = await fetch(`${API_BASE}/cases/${id}`);
-  if (!res.ok) throw new Error('Dosarul nu a putut fi găsit');
+  if (!res.ok) throw new Error('Case could not be found');
   return res.json();
 }
 
@@ -29,7 +29,7 @@ export async function updateCaseStatus(id, status, notes = '') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status, notes }),
   });
-  if (!res.ok) throw new Error('Nu s-a putut actualiza statusul');
+  if (!res.ok) throw new Error('Failed to update case status');
   return res.json();
 }
 
@@ -39,7 +39,7 @@ export async function updateCaseManualForm(id, data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Nu s-a putut salva formularul de verificare');
+  if (!res.ok) throw new Error('Failed to save underwriting verification form');
   return res.json();
 }
 
@@ -49,14 +49,14 @@ export async function createCase(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Nu s-a putut crea dosarul');
+  if (!res.ok) throw new Error('Failed to create new case');
   return res.json();
 }
 
 export async function fetchClients(search = '') {
   const url = search ? `${API_BASE}/clients?search=${encodeURIComponent(search)}` : `${API_BASE}/clients`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Eroare la încărcarea clienților');
+  if (!res.ok) throw new Error('Failed to load banking clients');
   return res.json();
 }
 
@@ -66,14 +66,14 @@ export async function createClient(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Nu s-a putut crea clientul');
+  if (!res.ok) throw new Error('Failed to register client');
   return res.json();
 }
 
 export async function fetchDocuments(caseId = null) {
   const url = caseId ? `${API_BASE}/documents?case_id=${caseId}` : `${API_BASE}/documents`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Eroare la încărcarea documentelor');
+  if (!res.ok) throw new Error('Failed to load documents');
   return res.json();
 }
 
@@ -83,14 +83,14 @@ export async function createDocument(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Nu s-a putut încărca documentul');
+  if (!res.ok) throw new Error('Failed to upload document');
   return res.json();
 }
 
 export async function fetchTasks(caseId = null) {
   const url = caseId ? `${API_BASE}/tasks?case_id=${caseId}` : `${API_BASE}/tasks`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Eroare la încărcarea sarcinilor');
+  if (!res.ok) throw new Error('Failed to load tasks');
   return res.json();
 }
 
@@ -98,14 +98,14 @@ export async function toggleTask(taskId) {
   const res = await fetch(`${API_BASE}/tasks/${taskId}/toggle`, {
     method: 'PATCH',
   });
-  if (!res.ok) throw new Error('Nu s-a putut actualiza sarcina');
+  if (!res.ok) throw new Error('Failed to update task status');
   return res.json();
 }
 
 export async function fetchHistory(caseId = null) {
   const url = caseId ? `${API_BASE}/history?case_id=${caseId}` : `${API_BASE}/history`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('Eroare la încărcarea istoricului');
+  if (!res.ok) throw new Error('Failed to load audit history');
   return res.json();
 }
 
@@ -119,7 +119,7 @@ export async function runCaseAnalysis(caseId, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(options),
   });
-  if (!res.ok) throw new Error('Eroare la rularea analizei AI multi-agent');
+  if (!res.ok) throw new Error('Failed to execute AI multi-agent analysis');
   return res.json();
 }
 
@@ -135,7 +135,7 @@ export async function resolveFinding(analysisId, findingId, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Nu s-a putut actualiza constatarea');
+  if (!res.ok) throw new Error('Failed to update finding status');
   return res.json();
 }
 
@@ -145,7 +145,7 @@ export async function sendRemediationNotification(analysisId, payload = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Eroare la trimiterea notificării de remediere');
+  if (!res.ok) throw new Error('Failed to send remediation notification');
   return res.json();
 }
 
@@ -155,6 +155,6 @@ export async function submitHumanDecision(analysisId, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Eroare la înregistrarea deciziei ofițerului');
+  if (!res.ok) throw new Error('Failed to record underwriting decision');
   return res.json();
 }

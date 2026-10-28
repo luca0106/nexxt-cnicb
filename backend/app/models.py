@@ -9,7 +9,7 @@ class Client(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String(150), nullable=False, index=True)
-    cnp = Column(String(13), unique=True, nullable=False, index=True)
+    national_id = Column(String(20), unique=True, nullable=False, index=True) # CNP / National ID
     email = Column(String(100), nullable=True)
     phone = Column(String(25), nullable=True)
     address = Column(String(250), nullable=True)
@@ -29,15 +29,15 @@ class Case(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_number = Column(String(50), unique=True, index=True, nullable=False)
     title = Column(String(200), nullable=False)
-    case_type = Column(String(100), default="Cerere de credit")
-    status = Column(String(50), default="in_lucru", index=True)  # in_lucru, in_verificare, complet, in_asteptare, respins
-    department = Column(String(100), default="Credite Retail")
-    priority = Column(String(50), default="normal")  # normal, ridicat, urgent
+    case_type = Column(String(100), default="Personal Loan Application")
+    status = Column(String(50), default="in_progress", index=True)  # in_progress, in_review, completed, pending, rejected
+    department = Column(String(100), default="Retail Lending")
+    priority = Column(String(50), default="normal")  # normal, high, urgent
     assigned_to = Column(String(100), default="Consultant 024")
     requested_amount = Column(Float, nullable=True)
     loan_term_months = Column(Integer, default=60)
     interest_rate_annual = Column(Float, default=8.9)
-    currency = Column(String(10), default="RON")
+    currency = Column(String(10), default="EUR")
     notes = Column(Text, nullable=True)
     scenario_tag = Column(String(100), nullable=True)  # discrepancy_case, expired_id_case, valid_green_case
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -58,7 +58,7 @@ class Document(Base):
     case_id = Column(Integer, ForeignKey("cases.id"), nullable=False)
     doc_code = Column(String(50), nullable=True)  # doc-1, doc-2, doc-3, doc-4
     file_name = Column(String(200), nullable=False)
-    document_type = Column(String(100), nullable=False)  # Formular cerere, Adeverință venit, Extras financiar, Copie CI, Factură utilități
+    document_type = Column(String(100), nullable=False)  # Application Form, Income Certificate, Bank Statement, ID Card Copy, Utility Bill
     file_size_kb = Column(Integer, default=120)
     mime_type = Column(String(50), default="application/pdf")
     page_count = Column(Integer, default=1)
@@ -75,7 +75,7 @@ class Task(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"), nullable=True)
     title = Column(String(200), nullable=False)
-    status = Column(String(50), default="in_lucru")  # in_lucru, finalizat, in_asteptare
+    status = Column(String(50), default="in_progress")  # in_progress, completed, pending
     priority = Column(String(50), default="normal")
     assigned_to = Column(String(100), default="Consultant 024")
     due_date = Column(DateTime, nullable=True)
@@ -106,7 +106,7 @@ class AIAnalysis(Base):
     status = Column(String(50), default="completed")  # queued, running, completed, failed
     engine_used = Column(String(100), default="Raiffeisen Hybrid Multi-Agent Engine v2.4")
     summary = Column(Text, nullable=True)
-    risk_score = Column(String(50), default="mediu")  # scazut, mediu, ridicat, critic
+    risk_score = Column(String(50), default="medium")  # low, medium, high, critical
     human_decision = Column(String(50), default="pending")  # pending, approved, clarification_sent, rejected
 
     # JSON serialized payloads from agents

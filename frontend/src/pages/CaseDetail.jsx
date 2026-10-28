@@ -40,18 +40,17 @@ export default function CaseDetail() {
   const [latestAnalysis, setLatestAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('documente'); // documente, fisa_verificare, sarcini, istoric
+  const [activeTab, setActiveTab] = useState('documents'); // documents, underwriting_sheet, tasks, history
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [highlightedLine, setHighlightedLine] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Copilot state: open/closed & viewMode ('split' | 'expanded')
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [copilotViewMode, setCopilotViewMode] = useState('split');
 
-  // Manual Officer Verification Form state
+  // Manual Form
   const [formName, setFormName] = useState('');
-  const [formCnp, setFormCnp] = useState('');
+  const [formNatId, setFormNatId] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formEmployer, setFormEmployer] = useState('');
   const [formIncome, setFormIncome] = useState('');
@@ -61,16 +60,16 @@ export default function CaseDetail() {
   const [formNotes, setFormNotes] = useState('');
   const [savingForm, setSavingForm] = useState(false);
 
-  // Upload Document modal state
+  // Upload Doc Modal
   const [showDocModal, setShowDocModal] = useState(false);
   const [newDocName, setNewDocName] = useState('');
-  const [newDocType, setNewDocType] = useState('Adeverință venit');
+  const [newDocType, setNewDocType] = useState('Income Certificate');
   const [newDocContent, setNewDocContent] = useState('');
 
   const syncFormState = (data) => {
     if (!data) return;
     setFormName(data.client?.full_name || '');
-    setFormCnp(data.client?.cnp || '');
+    setFormNatId(data.client?.national_id || '');
     setFormAddress(data.client?.address || '');
     setFormEmployer(data.client?.employer || '');
     setFormIncome(String(data.client?.monthly_income ?? ''));
@@ -94,7 +93,7 @@ export default function CaseDetail() {
       setLatestAnalysis(existingAnalysis);
     } catch (err) {
       console.error(err);
-      setError('Nu s-a putut încărca dosarul specificat.');
+      setError('Unable to load specified case.');
     } finally {
       setLoading(false);
     }
@@ -108,7 +107,6 @@ export default function CaseDetail() {
     const nextState = !isCopilotOpen;
     setIsCopilotOpen(nextState);
     if (nextState && setIsSidebarCollapsed) {
-      // Collapse left menu automatically on desktop to give maximum breathing room for Split-View
       setIsSidebarCollapsed(true);
     }
     if (nextState) {
@@ -124,12 +122,12 @@ export default function CaseDetail() {
       const updated = await updateCaseStatus(
         caseData.id,
         newStatus,
-        `Status modificat manual în ${newStatus}`
+        `Status updated to ${newStatus}`
       );
       setCaseData(updated);
       syncFormState(updated);
     } catch (err) {
-      alert('Eroare la actualizarea statusului.');
+      alert('Error updating status.');
     } finally {
       setUpdatingStatus(false);
     }
@@ -141,7 +139,7 @@ export default function CaseDetail() {
       setSavingForm(true);
       const updated = await updateCaseManualForm(caseData.id, {
         full_name: formName,
-        cnp: formCnp,
+        national_id: formNatId,
         address: formAddress,
         employer: formEmployer,
         monthly_income: parseFloat(formIncome) || 0,
@@ -153,7 +151,7 @@ export default function CaseDetail() {
       setCaseData(updated);
       syncFormState(updated);
     } catch (err) {
-      alert('Eroare la salvarea fișei de verificare.');
+      alert('Error saving underwriting form.');
     } finally {
       setSavingForm(false);
     }
@@ -175,7 +173,7 @@ export default function CaseDetail() {
       setNewDocContent('');
       loadCase();
     } catch (err) {
-      alert('Nu s-a putut atașa documentul.');
+      alert('Could not attach document.');
     }
   };
 
@@ -188,11 +186,10 @@ export default function CaseDetail() {
     }
   };
 
-  // Called when clicking a citation inside AICopilotDrawer
   const handleSelectCitation = (documentId, lineNumber) => {
     if (!caseData?.documents) return;
     const foundDoc = caseData.documents.find((d) => d.id === documentId) || caseData.documents[0];
-    setActiveTab('documente');
+    setActiveTab('documents');
     setSelectedDoc(foundDoc);
     setHighlightedLine(lineNumber);
 
@@ -214,7 +211,7 @@ export default function CaseDetail() {
   if (loading) {
     return (
       <div className="p-12 text-center text-slate-400">
-        Se încarcă detaliile dosarului...
+        Loading case details...
       </div>
     );
   }
@@ -223,12 +220,12 @@ export default function CaseDetail() {
     return (
       <div className="p-8 rounded-2xl bg-red-950/30 border border-red-800/40 text-center space-y-4">
         <AlertTriangle className="w-10 h-10 text-red-400 mx-auto" />
-        <p className="text-red-300 font-medium">{error || 'Dosarul nu a fost găsit.'}</p>
+        <p className="text-red-300 font-medium">{error || 'Case not found.'}</p>
         <button
-          onClick={() => navigate('/dosare')}
-          className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs hover:bg-slate-700"
+          onClick={() => navigate('/cases')}
+          className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs hover:bg-slate-700 cursor-pointer"
         >
-          Înapoi la lista dosarelor
+          Return to cases list
         </button>
       </div>
     );
@@ -238,21 +235,20 @@ export default function CaseDetail() {
 
   return (
     <div className="space-y-5 w-full min-w-0">
-      {/* Top back navigation & Scenario Pill */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Înapoi la dosare</span>
+          <span>Back to cases</span>
         </button>
 
         {caseData.scenario_tag && (
           <span className="text-xs font-mono px-3 py-1 rounded-full bg-[#0e172a] border border-[#1e3158] text-slate-300 max-w-full truncate">
-            {caseData.scenario_tag === 'discrepancy_case' && 'Scenariu Demo 1: Discrepanțe Cross-Check (Venit 5.200 vs 5.700 RON & Nume Ion vs Ioan)'}
-            {caseData.scenario_tag === 'expired_id_case' && 'Scenariu Demo 2: Edge Case (Buletin Expirat → Auto-Remediere SMS/Email)'}
-            {caseData.scenario_tag === 'valid_green_case' && 'Scenariu Demo 3: Dosar Valid 100% (Green Flags & DTI < 40%)'}
+            {caseData.scenario_tag === 'discrepancy_case' && 'Demo Scenario 1: Cross-Check Inconsistency (Income €5,200 vs €5,700 & Name John vs Jonathan)'}
+            {caseData.scenario_tag === 'expired_id_case' && 'Demo Scenario 2: Critical Edge Case (Expired ID Card → Automated SMS/Email)'}
+            {caseData.scenario_tag === 'valid_green_case' && 'Demo Scenario 3: 100% Valid Clean Case (Green Flags & DTI < 40%)'}
           </span>
         )}
       </div>
@@ -266,7 +262,7 @@ export default function CaseDetail() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                Dosar #{caseData.case_number}
+                Case #{caseData.case_number}
               </h1>
               <span className="text-xs px-2.5 py-0.5 rounded-md bg-[#131d30] border border-[#203152] text-slate-300 font-mono">
                 {caseData.case_type}
@@ -276,15 +272,14 @@ export default function CaseDetail() {
               </span>
             </div>
             <p className="text-slate-300 text-xs sm:text-sm mt-1 font-medium">
-              {caseData.title} — Solicitant: <strong className="text-white">{caseData.client.full_name}</strong>
+              {caseData.title} — Applicant: <strong className="text-white">{caseData.client.full_name}</strong>
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
-              Înregistrat: {new Date(caseData.created_at).toLocaleString('ro-RO')} • Responsabil: {caseData.assigned_to}
+              Registered: {new Date(caseData.created_at).toLocaleString('en-GB')} • Assigned to: {caseData.assigned_to}
             </p>
           </div>
         </div>
 
-        {/* Right Controls: Status Dropdown + Extension Trigger Button */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-[#050811] px-3 py-2 rounded-xl border border-[#192742]">
             <span className="text-xs text-slate-400">Status:</span>
@@ -294,11 +289,11 @@ export default function CaseDetail() {
               onChange={(e) => handleStatusChange(e.target.value)}
               className="bg-[#0e172a] text-xs font-semibold text-white px-2.5 py-1 rounded-lg border border-[#253960] focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="in_lucru">În lucru</option>
-              <option value="in_verificare">În verificare</option>
-              <option value="complet">Complet</option>
-              <option value="in_asteptare">În așteptare</option>
-              <option value="respins">Respins</option>
+              <option value="in_progress">In progress</option>
+              <option value="in_review">In review</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
 
@@ -311,18 +306,12 @@ export default function CaseDetail() {
             }`}
           >
             <Bot className="w-4 h-4 stroke-[2.2]" />
-            <span>{isCopilotOpen ? 'Închide AI Copilot' : 'Raiffeisen AI Copilot (Triage & Audit)'}</span>
+            <span>{isCopilotOpen ? 'Close AI Copilot' : 'Raiffeisen AI Copilot (Triage & Audit)'}</span>
           </button>
         </div>
       </div>
 
-      {/* Main Responsive Workspace Grid:
-          - When Copilot is closed: 100% width for BankDesk
-          - When Copilot is open in 'split' mode on xl screens: 6 cols BankDesk (Left) + 6 cols AI Copilot (Right)
-          - When Copilot is open in 'expanded' mode (or on < xl screens): AI Copilot appears prominently at full width above/alongside BankDesk!
-      */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* If Copilot is in EXPANDED mode, render it across all 12 columns at the top */}
         {isCopilotOpen && copilotViewMode === 'expanded' && (
           <div ref={copilotContainerRef} className="xl:col-span-12 w-full min-w-0">
             <AICopilotDrawer
@@ -338,87 +327,84 @@ export default function CaseDetail() {
           </div>
         )}
 
-        {/* LEFT PANE: BANKDESK NATIVE CASE WORKSPACE */}
+        {/* LEFT PANE: BANKDESK CASE WORKSPACE */}
         <div
           className={`space-y-5 min-w-0 w-full ${
             isSplitDesktop ? 'xl:col-span-6' : 'xl:col-span-12'
           }`}
         >
-          {/* Client Info & Notes Cards */}
           <div className={`grid grid-cols-1 ${isSplitDesktop ? 'gap-4' : 'lg:grid-cols-3 gap-5'}`}>
-            {/* Client Summary Card */}
             <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5">
               <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
                 <div className="flex items-center gap-2 text-white font-semibold text-sm">
                   <User className="w-4 h-4 text-blue-400" />
-                  <span>Date Client în Sistem</span>
+                  <span>Applicant Record</span>
                 </div>
                 <button
-                  onClick={() => setActiveTab('fisa_verificare')}
+                  onClick={() => setActiveTab('underwriting_sheet')}
                   className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
                 >
-                  Editează manual
+                  Edit manually
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
                 <div>
-                  <span className="text-slate-400 block text-xs">Nume complet</span>
+                  <span className="text-slate-400 block text-xs">Full Name</span>
                   <span className="text-slate-100 font-semibold">{caseData.client.full_name}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-xs">CNP</span>
-                  <span className="text-slate-200 font-mono">{caseData.client.cnp}</span>
+                  <span className="text-slate-400 block text-xs">National ID</span>
+                  <span className="text-slate-200 font-mono">{caseData.client.national_id}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-xs">Serie & Valabilitate CI</span>
+                  <span className="text-slate-400 block text-xs">ID Series & Expiry</span>
                   <span className="text-slate-200 font-mono text-xs">
-                    {caseData.client.id_card_series || 'RK 892011'} ({caseData.client.id_card_expiry || '2031-05-14'})
+                    {caseData.client.id_card_series || 'ID 892011'} ({caseData.client.id_card_expiry || '2031-05-14'})
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-xs">Angajator</span>
-                  <span className="text-slate-200 truncate block">{caseData.client.employer || 'Nespecificat'}</span>
+                  <span className="text-slate-400 block text-xs">Employer</span>
+                  <span className="text-slate-200 truncate block">{caseData.client.employer || 'Unspecified'}</span>
                 </div>
                 <div className="sm:col-span-2">
-                  <span className="text-slate-400 block text-xs">Adresă înregistrată</span>
+                  <span className="text-slate-400 block text-xs">Permanent Residence</span>
                   <span className="text-slate-200">{caseData.client.address || 'N/A'}</span>
                 </div>
               </div>
 
               <div className="pt-3 border-t border-[#142036] flex flex-wrap justify-between items-center gap-2">
                 <div>
-                  <span className="text-slate-400 block text-xs">Venit net în sistem</span>
+                  <span className="text-slate-400 block text-xs">Net Monthly Income</span>
                   <span className="text-emerald-400 font-bold text-sm sm:text-base">
-                    {caseData.client.monthly_income?.toLocaleString('ro-RO')} RON
+                    {caseData.client.monthly_income?.toLocaleString('en-US')} {caseData.currency}
                   </span>
                 </div>
                 {caseData.requested_amount && (
                   <div className="text-right">
-                    <span className="text-slate-400 block text-xs">Credit solicitat</span>
+                    <span className="text-slate-400 block text-xs">Loan Requested</span>
                     <span className="text-blue-400 font-bold text-sm sm:text-base">
-                      {caseData.requested_amount?.toLocaleString('ro-RO')} {caseData.currency} ({caseData.loan_term_months} luni)
+                      {caseData.requested_amount?.toLocaleString('en-US')} {caseData.currency} ({caseData.loan_term_months} mo)
                     </span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Operational Notes Card */}
             <div className={`${isSplitDesktop ? '' : 'lg:col-span-2'} p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
               <div>
                 <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
                   <div className="flex items-center gap-2 text-white font-semibold text-sm">
                     <FileCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Observații & Mențiuni Dosar (BankDesk)</span>
+                    <span>Case Remarks & Underwriting History</span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    Prioritate: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
+                    Priority: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
                   </span>
                 </div>
 
                 <div className="mt-3 p-3.5 rounded-xl bg-[#050811] border border-[#142036] text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {caseData.notes || 'Nicio observație adițională înregistrată.'}
+                  {caseData.notes || 'No additional remarks recorded.'}
                 </div>
               </div>
 
@@ -427,8 +413,8 @@ export default function CaseDetail() {
                   <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>
                     {latestAnalysis
-                      ? `Ultima analiză AI (${latestAnalysis.analysisId}): ${latestAnalysis.metrics?.redFlagsCount || 0} Alerte (Red Flags), DTI ${latestAnalysis.feasibilityMath?.dti_percentage}%`
-                      : 'Dosarul poate fi analizat automat cu extensia Raiffeisen AI Copilot.'}
+                      ? `Latest AI Audit (${latestAnalysis.analysisId}): ${latestAnalysis.metrics?.redFlagsCount || 0} Red Flags, DTI ${latestAnalysis.feasibilityMath?.dti_percentage}%`
+                      : 'This file can be audited automatically with the Raiffeisen AI Copilot extension.'}
                   </span>
                 </div>
                 {!isCopilotOpen && (
@@ -436,81 +422,79 @@ export default function CaseDetail() {
                     onClick={handleOpenCopilot}
                     className="text-xs sm:text-sm font-bold text-amber-400 hover:text-amber-300 shrink-0 underline cursor-pointer"
                   >
-                    {latestAnalysis ? 'Deschide Raportul AI →' : 'Pornește Triajul AI →'}
+                    {latestAnalysis ? 'View AI Audit Report →' : 'Launch AI Triage →'}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* BankDesk Tabs: Documente, Fișa de Verificare, Sarcini, Istoric */}
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
-                  onClick={() => setActiveTab('documente')}
+                  onClick={() => setActiveTab('documents')}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'documente'
+                    activeTab === 'documents'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Documente & Sursă ({caseData.documents.length})</span>
+                  <span>Documents & Source Line Viewer ({caseData.documents.length})</span>
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('fisa_verificare')}
+                  onClick={() => setActiveTab('underwriting_sheet')}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'fisa_verificare'
+                    activeTab === 'underwriting_sheet'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Calculator className="w-4 h-4" />
-                  <span>Fișă Verificare (Data Entry)</span>
+                  <span>Underwriting Sheet (Data Entry)</span>
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('sarcini')}
+                  onClick={() => setActiveTab('tasks')}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'sarcini'
+                    activeTab === 'tasks'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <CheckSquare className="w-4 h-4" />
-                  <span>Sarcini ({caseData.tasks.length})</span>
+                  <span>Tasks ({caseData.tasks.length})</span>
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('istoric')}
+                  onClick={() => setActiveTab('history')}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'istoric'
+                    activeTab === 'history'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <History className="w-4 h-4" />
-                  <span>Istoric ({caseData.history_entries.length})</span>
+                  <span>Audit Trail ({caseData.history_entries.length})</span>
                 </button>
               </div>
 
-              {activeTab === 'documente' && (
+              {activeTab === 'documents' && (
                 <button
                   onClick={() => setShowDocModal(true)}
                   className="px-3 py-1.5 rounded-xl bg-[#111c33] hover:bg-[#192848] border border-[#21355e] text-xs font-medium text-slate-200 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Atașează Document</span>
+                  <span>Upload Document</span>
                 </button>
               )}
             </div>
 
-            {/* TAB 1: DOCUMENTE & INSPECTOR RÂND-CU-RÂND */}
-            {activeTab === 'documente' && (
+            {/* TAB 1: DOCUMENTS & LINE-BY-LINE VIEWER */}
+            {activeTab === 'documents' && (
               <div className={`grid grid-cols-1 ${isSplitDesktop ? 'gap-4' : 'lg:grid-cols-12 gap-5'}`}>
-                {/* Document Selector */}
                 <div className={`${isSplitDesktop ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : 'lg:col-span-5 space-y-2.5'}`}>
                   {caseData.documents.map((doc) => {
                     const isSelected = selectedDoc?.id === doc.id;
@@ -558,7 +542,6 @@ export default function CaseDetail() {
                   })}
                 </div>
 
-                {/* Inline Document Inspector with Line Highlighting */}
                 <div className={`${isSplitDesktop ? '' : 'lg:col-span-7'} p-4 sm:p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
                   {selectedDoc ? (
                     <>
@@ -573,12 +556,12 @@ export default function CaseDetail() {
                             </h3>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
-                            Tip document: {selectedDoc.document_type} • Conținut numerotat pe rânduri
+                            Type: {selectedDoc.document_type} • Line-numbered document source inspector
                           </p>
                         </div>
                         {highlightedLine && (
                           <span className="px-3 py-1 rounded-lg bg-amber-400/20 border border-amber-400 text-amber-300 text-xs font-bold animate-pulse">
-                            Rândul {highlightedLine} evidențiat din citarea AI
+                            Line {highlightedLine} highlighted from AI audit
                           </span>
                         )}
                       </div>
@@ -609,31 +592,31 @@ export default function CaseDetail() {
                     </>
                   ) : (
                     <div className="p-12 text-center text-slate-500 text-sm">
-                      Selectează un document pentru a inspecta conținutul.
+                      Select a document from the left to inspect content.
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* TAB 2: FIȘA DE VERIFICARE MANUALĂ A OFIȚERULUI */}
-            {activeTab === 'fisa_verificare' && (
+            {/* TAB 2: MANUAL UNDERWRITING FORM */}
+            {activeTab === 'underwriting_sheet' && (
               <form
                 onSubmit={handleSaveManualForm}
                 className="p-5 sm:p-6 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-5"
               >
                 <div className="border-b border-[#142036] pb-3">
                   <h3 className="text-base font-bold text-white">
-                    Fișa Internă de Verificare și Eligibilitate (Flux Manual Ofițer)
+                    Internal Underwriting & Verification Record (Manual Workflow)
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    În fluxul clasic fără AI, ofițerul citește fiecare PDF și introduce/corectează manual aceste câmpuri (~45 min/dosar). Cu Raiffeisen AI Copilot, valorile validate se aplică cu un singur click.
+                    In traditional banking procedures without AI, the officer cross-checks each PDF manually (~45 mins). With Raiffeisen AI Copilot, validated values can be verified in 3 seconds.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Nume și Prenume Solicitant</label>
+                    <label className="block text-slate-300 font-medium mb-1">Applicant Legal Name</label>
                     <input
                       type="text"
                       value={formName}
@@ -642,16 +625,16 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Cod Numeric Personal (CNP)</label>
+                    <label className="block text-slate-300 font-medium mb-1">National ID Number</label>
                     <input
                       type="text"
-                      value={formCnp}
-                      onChange={(e) => setFormCnp(e.target.value)}
+                      value={formNatId}
+                      onChange={(e) => setFormNatId(e.target.value)}
                       className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2.5 text-white font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Adresă Domiciliu Verificată</label>
+                    <label className="block text-slate-300 font-medium mb-1">Verified Residence Address</label>
                     <input
                       type="text"
                       value={formAddress}
@@ -660,7 +643,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Angajator Confirmat</label>
+                    <label className="block text-slate-300 font-medium mb-1">Confirmed Employer</label>
                     <input
                       type="text"
                       value={formEmployer}
@@ -669,7 +652,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Venit Lunar Net Eligibil (RON)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Net Eligible Monthly Income (EUR)</label>
                     <input
                       type="number"
                       value={formIncome}
@@ -678,7 +661,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Obligații / Rate Lunare Existente (RON)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Existing Monthly Debt Obligations (EUR)</label>
                     <input
                       type="number"
                       value={formDebts}
@@ -687,7 +670,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Suma Credit Solicitată (RON)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Requested Loan Amount (EUR)</label>
                     <input
                       type="number"
                       value={formAmount}
@@ -696,7 +679,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Perioadă Creditare (Luni)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Loan Term (Months)</label>
                     <input
                       type="number"
                       value={formTerm}
@@ -707,7 +690,7 @@ export default function CaseDetail() {
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Note Verificare Ofițer</label>
+                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Officer Notes & Sign-off</label>
                   <textarea
                     rows="3"
                     value={formNotes}
@@ -723,18 +706,18 @@ export default function CaseDetail() {
                     className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{savingForm ? 'Se salvează...' : 'Salvează Datele în Dosar'}</span>
+                    <span>{savingForm ? 'Saving...' : 'Save Underwriting Record'}</span>
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 3: SARCINI */}
-            {activeTab === 'sarcini' && (
+            {/* TAB 3: TASKS */}
+            {activeTab === 'tasks' && (
               <div className="space-y-3">
                 {caseData.tasks.length === 0 ? (
                   <div className="p-8 text-center text-slate-500 text-sm bg-[#090f1e] rounded-2xl border border-[#142036]">
-                    Nicio sarcină activă pentru acest dosar.
+                    No active tasks for this case.
                   </div>
                 ) : (
                   <div className="space-y-2.5">
@@ -747,11 +730,11 @@ export default function CaseDetail() {
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            checked={task.status === 'finalizat'}
+                            checked={task.status === 'completed'}
                             onChange={() => {}}
                             className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer shrink-0"
                           />
-                          <span className={`text-xs sm:text-sm ${task.status === 'finalizat' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          <span className={`text-xs sm:text-sm ${task.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-200'}`}>
                             {task.title}
                           </span>
                         </div>
@@ -760,12 +743,12 @@ export default function CaseDetail() {
                           <span className="text-slate-400 font-mono">{task.assigned_to}</span>
                           <span
                             className={`px-2.5 py-0.5 rounded text-xs font-medium ${
-                              task.status === 'finalizat'
+                              task.status === 'completed'
                                 ? 'bg-emerald-950/50 text-emerald-400'
                                 : 'bg-amber-950/50 text-amber-400'
                             }`}
                           >
-                            {task.status === 'finalizat' ? 'Finalizat' : 'În lucru'}
+                            {task.status === 'completed' ? 'Completed' : 'In progress'}
                           </span>
                         </div>
                       </div>
@@ -775,8 +758,8 @@ export default function CaseDetail() {
               </div>
             )}
 
-            {/* TAB 4: ISTORIC / AUDIT TRAIL */}
-            {activeTab === 'istoric' && (
+            {/* TAB 4: AUDIT TRAIL */}
+            {activeTab === 'history' && (
               <div className="space-y-3">
                 {caseData.history_entries.map((log) => (
                   <div
@@ -789,11 +772,11 @@ export default function CaseDetail() {
                     <div className="flex-1 text-xs sm:text-sm min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-white">{log.action}</span>
-                        <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString('ro-RO')}</span>
+                        <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString('en-GB')}</span>
                       </div>
                       <p className="text-slate-300 mt-1 break-words">{log.details}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        Efectuat de: <span className="text-slate-400 font-medium">{log.performed_by}</span>
+                        Performed by: <span className="text-slate-400 font-medium">{log.performed_by}</span>
                       </p>
                     </div>
                   </div>
@@ -803,7 +786,7 @@ export default function CaseDetail() {
           </div>
         </div>
 
-        {/* RIGHT PANE (WHEN IN SPLIT MODE): RAIFFEISEN AI COPILOT */}
+        {/* RIGHT PANE: RAIFFEISEN AI COPILOT */}
         {isCopilotOpen && copilotViewMode === 'split' && (
           <div ref={copilotContainerRef} className="xl:col-span-6 w-full min-w-0 xl:sticky xl:top-[84px]">
             <AICopilotDrawer
@@ -820,50 +803,49 @@ export default function CaseDetail() {
         )}
       </div>
 
-      {/* Add Document Modal */}
       {showDocModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-semibold text-white">Atașează Document Nou la Dosar #{caseData.case_number}</h3>
-              <button onClick={() => setShowDocModal(false)} className="text-slate-400 hover:text-white">
+              <h3 className="text-base font-semibold text-white">Attach Document to Case #{caseData.case_number}</h3>
+              <button onClick={() => setShowDocModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleAddDocument} className="space-y-3 text-xs sm:text-sm">
               <div>
-                <label className="block text-slate-300 mb-1">Nume fișier</label>
+                <label className="block text-slate-300 mb-1">File Name</label>
                 <input
                   type="text"
                   required
                   value={newDocName}
                   onChange={(e) => setNewDocName(e.target.value)}
-                  placeholder="ex: Adeverinta_Rectificata.pdf"
+                  placeholder="e.g. Revised_Income_Certificate.pdf"
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-white"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 mb-1">Tip document</label>
+                <label className="block text-slate-300 mb-1">Document Category</label>
                 <select
                   value={newDocType}
                   onChange={(e) => setNewDocType(e.target.value)}
-                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-white"
+                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-white"
                 >
-                  <option value="Formular cerere">Formular cerere</option>
-                  <option value="Adeverință venit">Adeverință venit</option>
-                  <option value="Extras financiar">Extras financiar</option>
-                  <option value="Copie CI">Copie CI</option>
-                  <option value="Factură utilități">Factură utilități</option>
+                  <option value="Application Form">Application Form</option>
+                  <option value="Income Certificate">Income Certificate</option>
+                  <option value="Bank Statement">Bank Statement</option>
+                  <option value="ID Card Copy">ID Card Copy</option>
+                  <option value="Utility Bill">Utility Bill</option>
                 </select>
               </div>
               <div>
-                <label className="block text-slate-300 mb-1">Conținut text (OCR / Demo)</label>
+                <label className="block text-slate-300 mb-1">Document Text (OCR Content)</label>
                 <textarea
                   rows="5"
                   required
                   value={newDocContent}
                   onChange={(e) => setNewDocContent(e.target.value)}
-                  placeholder={"Rândul 1: ADEVERINȚĂ RECTIFICATĂ\nRândul 2: Nume și prenume solicitant: Ion Popescu\nRândul 3: Venit lunar net: 5.700 RON"}
+                  placeholder={"Line 1: REVISED SALARY CERTIFICATE\nLine 2: Employee Name: John Miller\nLine 3: Net Monthly Income: 5,700 EUR"}
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl p-3 text-white font-mono"
                 />
               </div>
@@ -871,15 +853,15 @@ export default function CaseDetail() {
                 <button
                   type="button"
                   onClick={() => setShowDocModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer"
                 >
-                  Anulează
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold"
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold cursor-pointer"
                 >
-                  Încarcă în Dosar
+                  Upload Document
                 </button>
               </div>
             </form>

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Case, AIAnalysis, AuditLog, Task
+from ..models import Case, AIAnalysis, AuditLog
 from ..schemas import (
     RunAnalysisRequest,
     AIAnalysisResponse,
@@ -27,7 +27,7 @@ def _serialize_analysis(analysis: AIAnalysis, case_number: str) -> AIAnalysisRes
         status=analysis.status,
         engineUsed=analysis.engine_used,
         summary=analysis.summary or "",
-        riskScore=analysis.risk_score or "mediu",
+        riskScore=analysis.risk_score or "medium",
         humanDecision=analysis.human_decision or "pending",
         piiMasking=json.loads(analysis.pii_masking_json or "{}"),
         extractedFields=json.loads(analysis.extracted_fields_json or "[]"),
@@ -48,7 +48,7 @@ def _find_case(db: Session, case_id: int) -> Case:
     if not c:
         c = db.query(Case).filter(Case.case_number == str(case_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
+        raise HTTPException(status_code=404, detail="Case not found.")
     return c
 
 
@@ -59,9 +59,9 @@ def start_case_analysis(
     db: Session = Depends(get_db)
 ):
     """
-    Contract API (Secțiunea 4.2 din PDF):
+    API Contract:
     POST /api/cases/{caseId}/analysis
-    Pornește orchestratorul multi-agentic (PII Shield -> Extractor || Policy -> Investigator + Python Math -> Remediation & Workflow).
+    Executes the multi-agent orchestration pipeline.
     """
     case_obj = _find_case(db, case_id)
     provider = payload.llmProvider if payload and payload.llmProvider else "auto"
@@ -94,17 +94,16 @@ def start_case_analysis(
     )
     db.add(analysis)
 
-    # Record audit log in BankDesk host app
     red_flags = result["metrics"]["redFlagsCount"]
     green_flags = result["metrics"]["greenFlagsCount"]
     audit_log = AuditLog(
         case_id=case_obj.id,
-        action="Rulare Raiffeisen AI Copilot (Triage & Audit)",
+        action="Raiffeisen AI Copilot Review Executed",
         performed_by="Raiffeisen AI Copilot + Consultant 024",
         details=(
-            f"Analiza #{analysis_uid} finalizată în {result['metrics']['aiProcessingSeconds']}s. "
-            f"Constatări: {red_flags} alerte (Red Flags), {green_flags} validări (Green Flags). "
-            f"Grad de îndatorare calculat în Python: {result['feasibilityMath']['dti_percentage']}%."
+            f"Analysis #{analysis_uid} completed in {result['metrics']['aiProcessingSeconds']}s. "
+            f"Findings: {red_flags} alerts (Red Flags), {green_flags} validations (Green Flags). "
+            f"Calculated Debt-to-Income (DTI): {result['feasibilityMath']['dti_percentage']}%."
         ),
         timestamp=now,
     )
@@ -117,22 +116,15 @@ def start_case_analysis(
 
 @router.get("/analyses/{analysis_id}", response_model=AIAnalysisResponse)
 def get_analysis_by_uid(analysis_id: str, db: Session = Depends(get_db)):
-    """
-    Contract API (Secțiunea 4.2 din PDF):
-    GET /api/analyses/{analysisId}
-    """
     analysis = db.query(AIAnalysis).filter(AIAnalysis.analysis_uid == analysis_id).first()
     if not analysis:
-        raise HTTPException(status_code=404, detail="Analiza AI nu a fost găsită.")
+        raise HTTPException(status_code=404, detail="AI Analysis not found.")
     case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
     return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
 
 
 @router.get("/cases/{case_id}/analysis", response_model=Optional[AIAnalysisResponse])
 def get_latest_case_analysis(case_id: int, db: Session = Depends(get_db)):
-    """
-    Returnează cea mai recentă analiză AI pentru un dosar (dacă există).
-    """
     case_obj = _find_case(db, case_id)
     analysis = (
         db.query(AIAnalysis)
@@ -152,15 +144,9 @@ def resolve_finding_human_in_the_loop(
     payload: FindingResolutionRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Human-in-the-Loop pe fiecare constatare (Secțiunea 3.1 & 3.5 din PDF):
-    Angajatul poate confirma constatarea, marca drept rezolvată sau selecta/corecta valoarea.
-    Dacă selectează o valoare pentru venit (ex: 5.700 RON în loc de 5.200 RON),
-    motorul determinist Python recalculează automat gradul de îndatorare și actualizează dosarul!
-    """
     analysis = db.query(AIAnalysis).filter(AIAnalysis.analysis_uid == analysis_id).first()
     if not analysis:
-        raise HTTPException(status_code=404, detail="Analiza nu a fost găsită.")
+        raise HTTPException(status_code=404, detail="Analysis not found.")
 
     case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
     findings = json.loads(analysis.findings_json or "[]")
@@ -174,7 +160,7 @@ def resolve_finding_human_in_the_loop(
             break
 
     if not target_finding:
-        raise HTTPException(status_code=404, detail="Constatarea nu a fost găsită.")
+        raise HTTPException(status_code=404, detail="Finding not found.")
 
     if payload.action == "confirm":
         target_finding["status"] = "confirmed_by_officer"
@@ -184,7 +170,6 @@ def resolve_finding_human_in_the_loop(
         target_finding["status"] = "resolved_by_officer"
         target_finding["resolvedValue"] = payload.resolved_value
 
-        # If monthly_income was resolved, recalculate Python DTI math and update client income!
         if target_finding.get("field") == "monthly_income" and payload.resolved_value is not None:
             new_income = float(payload.resolved_value)
             if case_obj and case_obj.client:
@@ -196,20 +181,18 @@ def resolve_finding_human_in_the_loop(
                 loan_term_months=int(case_obj.loan_term_months or 60) if case_obj else 60,
                 annual_interest_rate=float(case_obj.interest_rate_annual or 8.9) if case_obj else 8.9,
             )
-            # Update DTI finding in findings list too
             for f_item in findings:
                 if f_item.get("id") == "finding-dti-check":
-                    f_item["title"] = f"🟢 Grad de Îndatorare Recalculat (Python): {feasibility_math['dti_percentage']}% (Max: 40%)"
+                    f_item["title"] = f"🟢 Recalculated Debt-to-Income (Python): {feasibility_math['dti_percentage']}% (Max: 40%)"
                     f_item["description"] = (
-                        f"Recalculat pentru venitul validat de ofițer ({int(new_income)} RON): "
-                        f"Rată lunară {feasibility_math['calculated_monthly_installment_ron']} RON -> DTI {feasibility_math['dti_percentage']}%."
+                        f"Recalculated for officer-validated income (€{int(new_income)}): "
+                        f"Installment €{feasibility_math['calculated_monthly_installment']} -> DTI {feasibility_math['dti_percentage']}%."
                     )
                     f_item["resolvedValue"] = f"{feasibility_math['dti_percentage']}%"
-            # Update checklist step 2
             for step in checklist:
                 if step.get("step") == 2:
                     step["status"] = "passed"
-                    step["detail"] = f"Venit validat de ofițer: {int(new_income)} RON (DTI recalculat: {feasibility_math['dti_percentage']}%)"
+                    step["detail"] = f"Income confirmed by loan officer: €{int(new_income)} (DTI: {feasibility_math['dti_percentage']}%)"
 
         elif target_finding.get("field") == "applicant_name" and payload.resolved_value is not None:
             if case_obj and case_obj.client:
@@ -217,7 +200,7 @@ def resolve_finding_human_in_the_loop(
             for step in checklist:
                 if step.get("step") == 1:
                     step["status"] = "passed"
-                    step["detail"] = f"Identitate confirmată de ofițer: {payload.resolved_value}"
+                    step["detail"] = f"Applicant legal identity confirmed: {payload.resolved_value}"
 
     if payload.officer_note:
         target_finding["officerNote"] = payload.officer_note
@@ -228,11 +211,11 @@ def resolve_finding_human_in_the_loop(
 
     log = AuditLog(
         case_id=analysis.case_id,
-        action=f"Revizuire Umană Constatare ({target_finding.get('fieldLabel', finding_id)})",
+        action=f"Human Review Sign-off ({target_finding.get('fieldLabel', finding_id)})",
         performed_by="Consultant 024",
         details=(
-            f"Acțiune: {payload.action}. "
-            + (f"Valoare selectată/aplicată în dosar: {payload.resolved_value}." if payload.resolved_value else "")
+            f"Action: {payload.action}. "
+            + (f"Selected & applied value: {payload.resolved_value}." if payload.resolved_value else "")
         ),
         timestamp=datetime.utcnow()
     )
@@ -249,14 +232,9 @@ def send_remediation_notification(
     payload: RemediationTriggerRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Agentul de Remedieri (Automation):
-    Trimite notificarea de remediere (Email + SMS cu link securizat de reîncărcare documente)
-    către client și pune dosarul în așteptare.
-    """
     analysis = db.query(AIAnalysis).filter(AIAnalysis.analysis_uid == analysis_id).first()
     if not analysis:
-        raise HTTPException(status_code=404, detail="Analiza nu a fost găsită.")
+        raise HTTPException(status_code=404, detail="Analysis not found.")
 
     case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
     remediation = json.loads(analysis.remediation_json or "{}")
@@ -270,16 +248,16 @@ def send_remediation_notification(
     analysis.remediation_json = json.dumps(remediation, ensure_ascii=False)
 
     if case_obj:
-        case_obj.status = "in_asteptare"
+        case_obj.status = "pending"
         case_obj.updated_at = datetime.utcnow()
 
     log = AuditLog(
         case_id=analysis.case_id,
-        action="Trimitere Automatizată Email & SMS Remediere Client",
-        performed_by="Agentul de Remedieri AI (aprobat de Consultant 024)",
+        action="Automated Remediation SMS & Email Dispatched",
+        performed_by="Remediation Agent (Approved by Consultant 024)",
         details=(
-            f"Notificare transmisă pe Email ({remediation.get('recipientEmail')}) și SMS ({remediation.get('recipientPhone')}) "
-            f"cu link securizat de reîncărcare: {remediation.get('secureUploadLink')}."
+            f"Customer notification sent to Email ({remediation.get('recipientEmail')}) and SMS ({remediation.get('recipientPhone')}) "
+            f"with secure document upload link: {remediation.get('secureUploadLink')}."
         ),
         timestamp=datetime.utcnow()
     )
@@ -296,13 +274,9 @@ def submit_final_human_decision(
     payload: HumanDecisionRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    Abordare Human-in-the-Loop (Secțiunea 4 din propunerea Raiffeisen AI Copilot):
-    AI-ul face Triage & Audit, dar decizia bancară finală aparține ofițerului de credite.
-    """
     analysis = db.query(AIAnalysis).filter(AIAnalysis.analysis_uid == analysis_id).first()
     if not analysis:
-        raise HTTPException(status_code=404, detail="Analiza nu a fost găsită.")
+        raise HTTPException(status_code=404, detail="Analysis not found.")
 
     case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
     checklist = json.loads(analysis.workflow_checklist_json or "[]")
@@ -310,39 +284,38 @@ def submit_final_human_decision(
     analysis.human_decision = payload.decision
 
     status_map = {
-        "approve": ("complet", "APROBAT (Human-in-the-Loop)"),
-        "request_clarification": ("in_asteptare", "SOLICITARE CLARIFICĂRI / REMEDIERE"),
-        "reject": ("respins", "RESPINS DE OFIȚER"),
+        "approve": ("completed", "APPROVED (Human-in-the-Loop)"),
+        "request_clarification": ("pending", "PENDING CUSTOMER CLARIFICATION"),
+        "reject": ("rejected", "REJECTED BY CREDIT OFFICER"),
     }
-    new_case_status, decision_label = status_map.get(payload.decision, ("in_verificare", payload.decision))
+    new_case_status, decision_label = status_map.get(payload.decision, ("in_review", payload.decision))
 
     if case_obj:
         case_obj.status = new_case_status
         case_obj.updated_at = datetime.utcnow()
         if payload.officer_comments:
             stamp = datetime.utcnow().strftime("%d.%m.%Y %H:%M")
-            case_obj.notes = f"{case_obj.notes or ''}\n[Decizie Ofițer {stamp} - {decision_label}]: {payload.officer_comments}".strip()
+            case_obj.notes = f"{case_obj.notes or ''}\n[Officer Decision {stamp} - {decision_label}]: {payload.officer_comments}".strip()
 
-        # Mark case tasks as completed if approved
         if payload.decision == "approve":
             for t in case_obj.tasks:
-                t.status = "finalizat"
+                t.status = "completed"
 
     for step in checklist:
         if step.get("step") == 4:
             step["status"] = "passed" if payload.decision == "approve" else ("failed" if payload.decision == "reject" else "review")
-            step["detail"] = f"Decizie înregistrată de Consultant 024: {decision_label}"
+            step["detail"] = f"Final sign-off recorded by Consultant 024: {decision_label}"
 
     analysis.workflow_checklist_json = json.dumps(checklist, ensure_ascii=False)
 
     log = AuditLog(
         case_id=analysis.case_id,
-        action=f"Decizie Finală Ofițer: {decision_label}",
+        action=f"Final Underwriting Decision: {decision_label}",
         performed_by="Consultant 024",
         details=(
-            f"Decizie luată pe baza raportului AI #{analysis.analysis_uid}. "
-            f"Status dosar actualizat în '{new_case_status}'. "
-            + (f"Observații ofițer: {payload.officer_comments}" if payload.officer_comments else "")
+            f"Decision finalized based on AI Audit #{analysis.analysis_uid}. "
+            f"Case status transitioned to '{new_case_status}'. "
+            + (f"Officer Remarks: {payload.officer_comments}" if payload.officer_comments else "")
         ),
         timestamp=datetime.utcnow()
     )
@@ -351,4 +324,3 @@ def submit_final_human_decision(
     db.refresh(analysis)
 
     return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
-

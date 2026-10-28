@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 # Client schemas
 class ClientBase(BaseModel):
     full_name: str
-    cnp: str
+    national_id: str
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -53,7 +53,7 @@ class DocumentOut(DocumentBase):
 # Task schemas
 class TaskBase(BaseModel):
     title: str
-    status: Optional[str] = "in_lucru"
+    status: Optional[str] = "in_progress"
     priority: Optional[str] = "normal"
     assigned_to: Optional[str] = "Consultant 024"
     due_date: Optional[datetime] = None
@@ -87,15 +87,15 @@ class AuditLogOut(AuditLogBase):
 # Case schemas
 class CaseBase(BaseModel):
     title: str
-    case_type: Optional[str] = "Cerere de credit"
-    status: Optional[str] = "in_lucru"
-    department: Optional[str] = "Credite Retail"
+    case_type: Optional[str] = "Personal Loan Application"
+    status: Optional[str] = "in_progress"
+    department: Optional[str] = "Retail Lending"
     priority: Optional[str] = "normal"
     assigned_to: Optional[str] = "Consultant 024"
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
-    currency: Optional[str] = "RON"
+    currency: Optional[str] = "EUR"
     notes: Optional[str] = None
     scenario_tag: Optional[str] = None
 
@@ -112,7 +112,7 @@ class CaseStatusUpdate(BaseModel):
 
 class CaseManualFormUpdate(BaseModel):
     full_name: Optional[str] = None
-    cnp: Optional[str] = None
+    national_id: Optional[str] = None
     address: Optional[str] = None
     employer: Optional[str] = None
     monthly_income: Optional[float] = None
@@ -170,21 +170,18 @@ class CaseDetailOut(BaseModel):
 
 # Dashboard statistics
 class DashboardStats(BaseModel):
-    in_lucru: int
-    de_verificat: int
-    complet: int
-    in_asteptare: int
-    total_dosare: int
+    in_progress: int
+    to_verify: int
+    completed: int
+    pending: int
+    total_cases: int
     recent_cases: List[CaseListOut]
 
 
-# =========================================================
-# AI COPILOT / MULTI-AGENT EXTENSION SCHEMAS
-# =========================================================
-
+# AI Copilot schemas
 class RunAnalysisRequest(BaseModel):
     documentIds: Optional[List[str]] = None
-    llmProvider: Optional[str] = "auto"  # auto, openai, gemini, deterministic
+    llmProvider: Optional[str] = "auto"
     apiKey: Optional[str] = None
 
 
