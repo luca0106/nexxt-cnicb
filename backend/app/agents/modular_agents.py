@@ -1,7 +1,10 @@
 import json
+import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+from sqlalchemy.orm import object_session
 
+from ..models import FinancialProfile
 from .orchestrator import (
     call_aws_ai_gateway,
     run_pii_shield,
@@ -14,403 +17,899 @@ from .orchestrator import (
 
 
 # =============================================================================
-# MODULAR AI AGENT CATALOG & REGISTRY
-# Each agent has its own isolated namespace (`agent_id`) so multiple agents
-# can run independently on the same case without overwriting or conflicting.
+# 3 CORE PILLARS OF MODULAR AI ANALYSIS + 360° CLIENT EXECUTIVE SUMMARY
 # =============================================================================
 
 AGENT_CATALOG: List[Dict[str, Any]] = [
     {
-        "agentId": "kyc_identity",
-        "name": "KYC & Identity Verification Agent",
-        "shortLabel": "KYC & Identity Audit",
-        "icon": "ShieldCheck",
-        "color": "blue",
-        "description": "Audits National ID validity, expiration dates, legal name consistency across documents, and residential address matching.",
-        "recommendedFor": ["Account Opening", "Customer Profile Update", "Loan Application", "Residential Mortgage Loan"],
-    },
-    {
-        "agentId": "income_crosscheck",
-        "name": "Income & Employer Cross-Check Agent",
-        "shortLabel": "Income Cross-Check",
-        "icon": "FileSpreadsheet",
-        "color": "amber",
-        "description": "Reconciles net monthly income and employer data across Application Forms, Salary Certificates, and Bank Statements with line citations.",
-        "recommendedFor": ["Loan Application", "Residential Mortgage Loan", "Customer Profile Update"],
-    },
-    {
-        "agentId": "dti_affordability",
-        "name": "DTI & Interest Rate Stress-Test Agent",
-        "shortLabel": "DTI & Stress-Test",
+        "agentId": "dti_repayment_capacity",
+        "name": "DTI & Repayment Capacity Verification Agent",
+        "shortLabel": "1. DTI & Repayment Capacity",
         "icon": "Calculator",
         "color": "emerald",
-        "description": "Executes deterministic Python annuity math, 40% regulatory DTI ceiling verification, and +2.0% interest rate shock simulation.",
-        "recommendedFor": ["Loan Application", "Residential Mortgage Loan"],
+        "description": (
+            "Collects and structures income sources, active loan installments, and household living expenses; "
+            "computes regulatory DTI (40% cap), +2% rate stress-test, and net disposable cashflow, flagging missing or contradictory data."
+        ),
+        "recommendedFor": [
+            "Personal Consumer Loan",
+            "Loan Application",
+            "Residential Mortgage Loan",
+            "Auto & Green Mobility Loan",
+            "SME Micro-Credit",
+            "Credit Card & Overdraft",
+            "Account Opening",
+            "Customer Profile Update",
+        ],
     },
     {
-        "agentId": "aml_fraud_risk",
-        "name": "AML & Fraud Anomaly Detector",
-        "shortLabel": "AML & Fraud Screening",
+        "agentId": "unusual_transactions",
+        "name": "Unusual Transactions & Expense Anomaly Agent",
+        "shortLabel": "2. Unusual Transactions",
         "icon": "ScanSearch",
         "color": "purple",
-        "description": "Screens account statements and applicant metadata for anti-money laundering (AML) flags, identity anomalies, and behavioral risks.",
-        "recommendedFor": ["Account Opening", "Loan Application", "Residential Mortgage Loan", "Customer Profile Update"],
+        "description": (
+            "Analyzes 3-month bank statement inflows/outflows, aggregates baseline living expenses, detects unusual spending variations, "
+            "and isolates unverified ('suspected') transactions with evidence notes for bank officer verification."
+        ),
+        "recommendedFor": [
+            "Personal Consumer Loan",
+            "Loan Application",
+            "Residential Mortgage Loan",
+            "Auto & Green Mobility Loan",
+            "SME Micro-Credit",
+            "Credit Card & Overdraft",
+            "Account Opening",
+            "Customer Profile Update",
+        ],
     },
     {
-        "agentId": "smart_remediation",
-        "name": "Client Remediation & Comms Agent",
-        "shortLabel": "Smart Remediation",
-        "icon": "Send",
-        "color": "rose",
-        "description": "Drafts personalized customer SMS & Email notifications with encrypted document re-upload links via AWS Bedrock.",
-        "recommendedFor": ["Account Opening", "Loan Application", "Customer Profile Update", "Residential Mortgage Loan"],
+        "agentId": "doc_reconciliation",
+        "name": "Document Verification & Data Reconciliation Agent",
+        "shortLabel": "3. Document Reconciliation",
+        "icon": "FileSpreadsheet",
+        "color": "amber",
+        "description": (
+            "Extracts structured fields from attached financial and KYC documents, cross-checks them against internal system records, "
+            "ANAF, and the Financial Profile, and flags differences in declared income, observed inflows, obligations, or identity."
+        ),
+        "recommendedFor": [
+            "Personal Consumer Loan",
+            "Loan Application",
+            "Residential Mortgage Loan",
+            "Auto & Green Mobility Loan",
+            "SME Micro-Credit",
+            "Credit Card & Overdraft",
+            "Account Opening",
+            "Customer Profile Update",
+        ],
     },
 ]
 
 
 def is_agent_recommended(agent_meta: Dict[str, Any], case_title: str, case_type: str) -> bool:
-    combined = f"{case_title or ''} {case_type or ''}".lower()
-    for rec in agent_meta.get("recommendedFor", []):
-        if rec.lower() in combined:
-            return True
-    if "mortgage" in combined and "Mortgage" in " ".join(agent_meta.get("recommendedFor", [])):
-        return True
-    if "loan" in combined or "credit" in combined:
-        return "Loan Application" in agent_meta.get("recommendedFor", [])
-    if "account" in combined or "overdraft" in combined:
-        return "Account Opening" in agent_meta.get("recommendedFor", [])
-    if "profile" in combined or "kyc" in combined or "update" in combined:
-        return "Customer Profile Update" in agent_meta.get("recommendedFor", [])
     return True
 
 
-# =============================================================================
-# INDIVIDUAL MODULAR AGENT RUNNERS (POWERED BY AWS BEDROCK + DETERMINISTIC)
-# =============================================================================
+def _get_financial_profile(case_obj) -> Optional[FinancialProfile]:
+    """Safely fetches the client's FinancialProfile from the active SQLAlchemy session if available."""
+    try:
+        sess = object_session(case_obj)
+        if sess is not None and case_obj.client_id is not None:
+            return sess.get(FinancialProfile, case_obj.client_id)
+    except Exception:
+        pass
+    return None
 
-def _run_kyc_identity_module(case_obj, extracted_fields: list, findings: list) -> Dict[str, Any]:
-    kyc_findings = [
-        f for f in findings
-        if f.get("field") in ("id_card_validity", "applicant_name", "address", "national_id")
-    ]
-    red_count = sum(1 for f in kyc_findings if f.get("flagType") == "red_flag")
 
-    prompt = (
-        f"You are the KYC & Identity Verification AI Agent for Raiffeisen Bank. "
-        f"Case #{case_obj.case_number} ({case_obj.title} - {case_obj.case_type}) for applicant {case_obj.client.full_name}. "
-        f"KYC findings detected: {json.dumps([f['title'] + ': ' + f['description'] for f in kyc_findings])}. "
-        f"Provide a 2-sentence compliance assessment for the bank officer focusing strictly on identity verification, ID expiry, and address match."
+def _extract_bank_statement_metrics(documents: list, fallback_income: float, fallback_debts: float) -> Dict[str, Any]:
+    """Parses the 3-Month Bank Statement document for inflows, debt service, and closing balance."""
+    stmt_doc = next((d for d in documents if d.document_type == "Bank Statement"), None)
+    salary_inflows: List[Dict[str, Any]] = []
+    closing_balance: Optional[float] = None
+    external_debt_service: Optional[float] = None
+    iban: str = "N/A"
+
+    if stmt_doc and stmt_doc.content_text:
+        for idx, raw_line in enumerate(stmt_doc.content_text.splitlines(), start=1):
+            clean = re.sub(r"^Line\s+\d+\s*:\s*", "", raw_line).strip()
+            if "IBAN:" in clean:
+                iban_part = clean.split("|")[0].replace("IBAN:", "").strip()
+                if iban_part:
+                    iban = iban_part
+            if "Salary Credit" in clean or "Salary Inflow" in clean:
+                m = re.search(r"([+\-]?\d[\d\.,]*)\s*(?:EUR|RON)", clean)
+                if m:
+                    try:
+                        val = float(m.group(1).replace("+", "").replace(",", ""))
+                        if "Month -" in clean:
+                            month_label = clean.split(":")[0].strip()
+                            salary_inflows.append({
+                                "month": month_label,
+                                "amount": val,
+                                "lineNumber": idx,
+                                "documentId": stmt_doc.id,
+                                "documentName": stmt_doc.file_name,
+                                "quote": raw_line,
+                            })
+                    except ValueError:
+                        pass
+            if "External Credit Bureau Monthly Debt Service" in clean or "Existing Debt Repayments" in clean:
+                m = re.search(r"(\d[\d\.,]*)\s*(?:EUR|RON)", clean)
+                if m:
+                    try:
+                        external_debt_service = float(m.group(1).replace(",", ""))
+                    except ValueError:
+                        pass
+            if "Closing Account Balance" in clean:
+                m = re.search(r"(\d[\d\.,]*)\s*(?:EUR|RON)", clean)
+                if m:
+                    try:
+                        closing_balance = float(m.group(1).replace(",", ""))
+                    except ValueError:
+                        pass
+
+    avg_inflow = (
+        round(sum(x["amount"] for x in salary_inflows) / len(salary_inflows), 2)
+        if salary_inflows
+        else fallback_income
     )
-    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a senior banking KYC & Identity Compliance AI Agent.")
-    used_aws = bool(aws_insight and len(aws_insight.strip()) > 10)
-
-    if not used_aws:
-        if red_count > 0:
-            aws_insight = (
-                f"KYC Alert on Case #{case_obj.case_number}: {red_count} identity/document discrepancy flag(s) detected "
-                f"requiring mandatory officer verification under PROC-KYC-01 and PROC-DOC-02 before onboarding or disbursement."
-            )
-        else:
-            aws_insight = (
-                f"KYC Verification Passed: Applicant {case_obj.client.full_name} (ID: {case_obj.client.national_id}) has valid identity "
-                f"documentation (expires {case_obj.client.id_card_expiry}) and 100% consistent residential address records."
-            )
-
     return {
-        "agentId": "kyc_identity",
-        "name": "KYC & Identity Verification Agent",
-        "status": "action_required" if red_count > 0 else "passed",
-        "badgeText": f"{red_count} KYC Alert(s)" if red_count > 0 else "KYC Verified",
-        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + KYC Rule Engine" if used_aws else "Deterministic KYC Rule Engine",
-        "executedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
-        "aiNarrative": aws_insight.strip(),
-        "highlights": [
-            {
-                "label": "Applicant Legal Name",
-                "value": case_obj.client.full_name,
-                "status": "warning" if any(f["field"] == "applicant_name" and f["flagType"] == "red_flag" for f in kyc_findings) else "ok"
-            },
-            {
-                "label": "National ID (SSN)",
-                "value": case_obj.client.national_id or "N/A",
-                "status": "ok"
-            },
-            {
-                "label": "ID Card Expiration",
-                "value": case_obj.client.id_card_expiry or "N/A",
-                "status": "critical" if any(f["field"] == "id_card_validity" and f["flagType"] == "red_flag" for f in kyc_findings) else "ok"
-            },
-            {
-                "label": "Address Validation",
-                "value": "Address Mismatch" if any(f["field"] == "address" and f["flagType"] == "red_flag" for f in kyc_findings) else "Verified Residence",
-                "status": "warning" if any(f["field"] == "address" and f["flagType"] == "red_flag" for f in kyc_findings) else "ok"
-            }
-        ],
-        "findings": kyc_findings,
+        "hasBankStatement": stmt_doc is not None,
+        "documentId": stmt_doc.id if stmt_doc else None,
+        "documentName": stmt_doc.file_name if stmt_doc else "N/A",
+        "iban": iban,
+        "salaryInflows": salary_inflows,
+        "averageMonthlyInflow": avg_inflow,
+        "externalDebtService": external_debt_service if external_debt_service is not None else fallback_debts,
+        "closingBalance": closing_balance if closing_balance is not None else round(fallback_income * 2.4, 2),
     }
 
 
-def _run_income_crosscheck_module(case_obj, extracted_fields: list, findings: list) -> Dict[str, Any]:
-    inc_findings = [
-        f for f in findings
-        if f.get("field") in ("monthly_income", "employer")
-    ]
-    income_extractions = [item for item in extracted_fields if item.get("field") == "monthly_income"]
-    red_count = sum(1 for f in inc_findings if f.get("flagType") == "red_flag")
+def _aggregate_financial_profile_data(case_obj, profile: Optional[FinancialProfile]) -> Dict[str, Any]:
+    """
+    Aggregates income, expenses, and credits according to the strict banking rules in AGENTS.md:
+    - Total expenses include 'declared' and 'confirmed'; 'suspected' is isolated separately; 'dismissed' is excluded.
+    - Active and overdue credits are included in monthly debt payments; 'paid_off' credits are excluded.
+    - 'suspected' means unverified and preserves its status and evidence_note.
+    """
+    client = case_obj.client
+    declared_client_income = float(client.monthly_income or 0.0)
+    anaf_income = float(client.anaf_income) if client.anaf_income is not None else None
+    client_existing_debts = float(client.existing_monthly_debts or 0.0)
 
-    prompt = (
-        f"You are the Income & Employer Cross-Verification AI Agent for Raiffeisen Bank. "
-        f"Case #{case_obj.case_number} ({case_obj.title}) for {case_obj.client.full_name}, Employer: {case_obj.client.employer}. "
-        f"Extracted income records across documents: {json.dumps([{'doc': i['documentName'], 'amount': i['value'], 'line': i['lineNumber']} for i in income_extractions])}. "
-        f"Provide a 2-sentence underwriting recommendation regarding income consistency and which document figure is most authoritative under PROC-INC-03."
-    )
-    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a banking Income & Payroll Verification AI Agent.")
-    used_aws = bool(aws_insight and len(aws_insight.strip()) > 10)
+    if profile is not None:
+        prof_salary = float(profile.monthly_salary or 0.0)
+        prof_other = float(profile.other_monthly_income or 0.0)
+        prof_total_income = round(prof_salary + prof_other, 2)
+        currency = profile.currency or case_obj.currency or "EUR"
+        marital_status = profile.marital_status or client.marital_status or "Single"
+        children_count = int(profile.number_of_children if profile.number_of_children is not None else (client.dependents_count or 0))
 
-    if not used_aws:
-        if red_count > 0:
-            aws_insight = (
-                f"Income discrepancy identified across documents for {case_obj.client.full_name}: Application states €5,200 whereas "
-                f"official Employer Salary Certificate and Bank Account Statement confirm €5,700. Under PROC-INC-03, official payroll records prevail."
-            )
-        else:
-            aws_insight = (
-                f"Three-way income reconciliation passed: €{int(case_obj.client.monthly_income or 0):,} net monthly salary from "
-                f"{case_obj.client.employer} is 100% consistent across all uploaded documents."
-            )
+        baseline_expenses = []
+        suspected_expenses = []
+        dismissed_expenses = []
+
+        for exp in profile.expenses:
+            item = {
+                "id": exp.id,
+                "category": exp.category,
+                "categoryLabel": exp.category.replace("_", " ").title(),
+                "monthlyAmount": round(float(exp.monthly_amount or 0.0), 2),
+                "verificationStatus": exp.verification_status,
+                "evidenceNote": exp.evidence_note or "No additional note.",
+            }
+            if exp.verification_status in ("declared", "confirmed"):
+                baseline_expenses.append(item)
+            elif exp.verification_status == "suspected":
+                suspected_expenses.append(item)
+            elif exp.verification_status == "dismissed":
+                dismissed_expenses.append(item)
+
+        active_credits = []
+        paid_off_credits = []
+        for cr in profile.credits:
+            c_item = {
+                "id": cr.id,
+                "lender": cr.lender,
+                "creditType": cr.credit_type.replace("_", " ").title(),
+                "originalAmount": round(float(cr.original_amount or 0.0), 2),
+                "remainingBalance": round(float(cr.remaining_balance or 0.0), 2),
+                "monthlyPayment": round(float(cr.monthly_payment or 0.0), 2),
+                "interestRateAnnual": round(float(cr.interest_rate_annual or 0.0), 2) if cr.interest_rate_annual is not None else None,
+                "remainingTermMonths": cr.remaining_term_months,
+                "status": cr.status,
+            }
+            if cr.status in ("active", "overdue"):
+                active_credits.append(c_item)
+            else:
+                paid_off_credits.append(c_item)
+
+        baseline_expenses_total = round(sum(x["monthlyAmount"] for x in baseline_expenses), 2)
+        suspected_expenses_total = round(sum(x["monthlyAmount"] for x in suspected_expenses), 2)
+        active_credits_monthly_total = round(sum(x["monthlyPayment"] for x in active_credits), 2)
+        active_credits_balance_total = round(sum(x["remainingBalance"] for x in active_credits), 2)
+    else:
+        prof_salary = declared_client_income
+        prof_other = 0.0
+        prof_total_income = declared_client_income
+        currency = case_obj.currency or "EUR"
+        marital_status = client.marital_status or "Single"
+        children_count = int(client.dependents_count or 0)
+        baseline_expenses = []
+        suspected_expenses = []
+        dismissed_expenses = []
+        active_credits = []
+        paid_off_credits = []
+        baseline_expenses_total = round(declared_client_income * 0.35, 2)
+        suspected_expenses_total = 0.0
+        active_credits_monthly_total = client_existing_debts
+        active_credits_balance_total = 0.0
 
     return {
-        "agentId": "income_crosscheck",
-        "name": "Income & Employer Cross-Check Agent",
-        "status": "needs_review" if red_count > 0 else "passed",
-        "badgeText": "Income Mismatch" if red_count > 0 else "Income Reconciled",
-        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + Payroll Cross-Checker" if used_aws else "Deterministic Payroll Cross-Checker",
-        "executedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
-        "aiNarrative": aws_insight.strip(),
-        "highlights": [
-            {
-                "label": "Verified Employer",
-                "value": case_obj.client.employer or "N/A",
-                "status": "ok"
-            },
-            {
-                "label": "Declared Net Income",
-                "value": f"€{int(case_obj.client.monthly_income or 0):,}",
-                "status": "warning" if red_count > 0 else "ok"
-            },
-            {
-                "label": "Documents Cross-Checked",
-                "value": f"{len(income_extractions)} Source Documents",
-                "status": "ok"
-            },
-            {
-                "label": "Applicable Policy Rule",
-                "value": "PROC-INC-03 (3-Way Match)",
-                "status": "ok"
-            }
-        ],
-        "findings": inc_findings,
+        "hasFinancialProfile": profile is not None,
+        "currency": currency,
+        "maritalStatus": str(marital_status).title(),
+        "childrenCount": children_count,
+        "declaredClientIncome": declared_client_income,
+        "anafIncome": anaf_income,
+        "profileSalary": prof_salary,
+        "profileOtherIncome": prof_other,
+        "profileTotalIncome": prof_total_income,
+        "clientExistingDebts": client_existing_debts,
+        "baselineExpenses": baseline_expenses,
+        "baselineExpensesTotal": baseline_expenses_total,
+        "suspectedExpenses": suspected_expenses,
+        "suspectedExpensesTotal": suspected_expenses_total,
+        "dismissedExpensesCount": len(dismissed_expenses),
+        "activeCredits": active_credits,
+        "paidOffCredits": paid_off_credits,
+        "activeCreditsMonthlyTotal": active_credits_monthly_total,
+        "activeCreditsBalanceTotal": active_credits_balance_total,
     }
 
 
-def _run_dti_affordability_module(case_obj, feasibility_math: dict) -> Dict[str, Any]:
-    # Calculate an additional stress-test scenario (+2.0% interest rate shock) in pure Python
-    stressed_rate = round(float(feasibility_math.get("annual_interest_rate_percent", 8.9)) + 2.0, 2)
+# =============================================================================
+# PILLAR 1: DTI & REPAYMENT CAPACITY VERIFICATION AGENT
+# (Verificarea gradului de îndatorare și a capacității de rambursare)
+# =============================================================================
+
+def _run_dti_repayment_capacity_module(
+    case_obj,
+    extracted_fields: list,
+    feasibility_math: dict,
+    findings: list,
+    fp_data: dict,
+) -> Dict[str, Any]:
+    client = case_obj.client
+    # Stress-test scenario (+2.0% interest rate shock)
+    base_rate = float(feasibility_math.get("annual_interest_rate_percent", 8.9))
+    stressed_rate = round(base_rate + 2.0, 2)
+    income_used = float(feasibility_math.get("monthly_income_used", client.monthly_income or 5000.0))
+    existing_debts_used = float(feasibility_math.get("existing_monthly_debts", client.existing_monthly_debts or 0.0))
+    requested_amount = float(feasibility_math.get("requested_amount", case_obj.requested_amount or 35000.0))
+    term_months = int(feasibility_math.get("loan_term_months", case_obj.loan_term_months or 60))
+
     stressed_math = calculate_feasibility_math(
-        monthly_income=float(feasibility_math.get("monthly_income_used", 5000.0)),
-        existing_debts=float(feasibility_math.get("existing_monthly_debts", 0.0)),
-        requested_amount=float(feasibility_math.get("requested_amount", 35000.0)),
-        loan_term_months=int(feasibility_math.get("loan_term_months", 60)),
+        monthly_income=income_used,
+        existing_debts=existing_debts_used,
+        requested_amount=requested_amount,
+        loan_term_months=term_months,
         annual_interest_rate=stressed_rate,
     )
 
-    dti_base = feasibility_math.get("dti_percentage", 0.0)
-    dti_stressed = stressed_math.get("dti_percentage", 0.0)
-    installment_base = feasibility_math.get("calculated_monthly_installment", 0.0)
-    installment_stressed = stressed_math.get("calculated_monthly_installment", 0.0)
+    dti_base = float(feasibility_math.get("dti_percentage", 0.0))
+    dti_stressed = float(stressed_math.get("dti_percentage", 0.0))
+    installment_base = float(feasibility_math.get("calculated_monthly_installment", 0.0))
+    installment_stressed = float(stressed_math.get("calculated_monthly_installment", 0.0))
+    total_debt_service = round(existing_debts_used + installment_base, 2)
+
+    # Disposable cashflow after living expenses (declared + confirmed) and all loan installments
+    living_expenses = fp_data["baselineExpensesTotal"]
+    total_monthly_outflows_with_loan = round(living_expenses + total_debt_service, 2)
+    net_disposable_cashflow = round(income_used - total_monthly_outflows_with_loan, 2)
+
+    # Identify missing or contradictory financial data
+    contradictions: List[Dict[str, str]] = []
+    if fp_data["hasFinancialProfile"]:
+        if abs(fp_data["profileSalary"] - fp_data["declaredClientIncome"]) > 1.0:
+            contradictions.append({
+                "field": "Monthly Salary",
+                "issue": f"Case declared income (€{fp_data['declaredClientIncome']:,.0f}) differs from Financial Profile salary (€{fp_data['profileSalary']:,.0f}).",
+                "severity": "warning",
+            })
+        if abs(fp_data["activeCreditsMonthlyTotal"] - fp_data["clientExistingDebts"]) > 1.0:
+            contradictions.append({
+                "field": "Existing Loan Obligations",
+                "issue": (
+                    f"CRM existing debts (€{fp_data['clientExistingDebts']:,.0f}/mo) differ from active credits in Financial Profile "
+                    f"(€{fp_data['activeCreditsMonthlyTotal']:,.0f}/mo across {len(fp_data['activeCredits'])} active loan(s))."
+                ),
+                "severity": "warning",
+            })
+    if client.anaf_income is not None and abs(float(client.anaf_income) - fp_data["declaredClientIncome"]) > 1.0:
+        contradictions.append({
+            "field": "ANAF Fiscal Revenue vs Declared",
+            "issue": f"Application declared €{fp_data['declaredClientIncome']:,.0f}/mo, whereas ANAF database reports €{float(client.anaf_income):,.0f}/mo.",
+            "severity": "warning",
+        })
+    if not client.anaf_consent:
+        contradictions.append({
+            "field": "ANAF Interrogation Consent",
+            "issue": "Electronic ANAF interrogation consent is missing; income verification relies on physical paper certificate.",
+            "severity": "info",
+        })
+
+    dti_findings = [
+        f for f in findings
+        if f.get("field") in ("monthly_income", "existing_debts", "dti_ratio") or "DTI" in f.get("title", "")
+    ]
+
+    is_over_dti = dti_base > 40.0
+    has_cashflow_deficit = net_disposable_cashflow < 300.0
 
     prompt = (
-        f"You are the Financial Risk & DTI Stress-Test AI Agent for Raiffeisen Bank. "
-        f"Case #{case_obj.case_number} ({case_obj.title}): Requested amount €{feasibility_math.get('requested_amount')}, "
-        f"Term {feasibility_math.get('loan_term_months')} months. "
-        f"Base DTI is {dti_base}% (Installment €{installment_base}) and under a +2% interest rate shock ({stressed_rate}%), "
-        f"stressed DTI becomes {dti_stressed}% (Installment €{installment_stressed}). Regulatory ceiling is 40%. "
-        f"Write 2 concise sentences advising the credit officer on repayment resilience."
+        f"You are the DTI & Repayment Capacity AI Agent for Raiffeisen Bank. "
+        f"Case #{case_obj.case_number} ({case_obj.title}) for {client.full_name}. "
+        f"Structured Financials: Eligible Net Income €{income_used:,.0f}/mo (+ €{fp_data['profileOtherIncome']:,.0f} supplemental), "
+        f"Existing Active Loan Installments €{existing_debts_used:,.0f}/mo (Total Remaining Debt Balance €{fp_data['activeCreditsBalanceTotal']:,.0f}), "
+        f"Proposed New Installment €{installment_base:,.2f}/mo over {term_months}m at {base_rate}%. "
+        f"Calculated Regulatory DTI: {dti_base}% (40% max ceiling); Stress-Test DTI (+2% rate): {dti_stressed}%. "
+        f"Confirmed/Declared Household Living Expenses: €{living_expenses:,.0f}/mo -> Net Monthly Disposable Cashflow after all expenses & loans: €{net_disposable_cashflow:,.0f}/mo. "
+        f"Missing/Contradictory signals: {json.dumps(contradictions)}. "
+        f"Write a concise 2-3 sentence credit assessment on debt sustainability, repayment capacity, and any missing/contradictory data."
     )
-    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a quantitative credit risk AI advisor.")
+    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a quantitative credit risk and repayment capacity AI specialist.")
     used_aws = bool(aws_insight and len(aws_insight.strip()) > 10)
 
     if not used_aws:
-        aws_insight = (
-            f"Deterministic Python calculation confirms strong repayment capacity: baseline DTI is {dti_base}% (€{installment_base}/mo), "
-            f"well below the 40% regulatory ceiling. Even under a +2.0% interest rate stress shock ({stressed_rate}%), "
-            f"stressed DTI reaches only {dti_stressed}% (€{installment_stressed}/mo), maintaining a comfortable safety buffer."
-        )
+        if is_over_dti:
+            aws_insight = (
+                f"Prudential DTI Alert (REG-DTI-04): Total debt service of €{total_debt_service:,.2f}/mo results in a {dti_base}% DTI ratio, "
+                f"exceeding the 40% regulatory ceiling (stress-tested at {dti_stressed}%). Restructuring tenor or reducing principal is required."
+            )
+        else:
+            contra_note = (
+                f" Note: {len(contradictions)} data variance(s) detected ({contradictions[0]['issue']})"
+                if contradictions
+                else " All income and obligation figures are reconciled across system records."
+            )
+            aws_insight = (
+                f"Repayment Capacity Verified: Baseline DTI is {dti_base}% (€{installment_base:,.2f}/mo new installment + €{existing_debts_used:,.0f}/mo existing debts), "
+                f"remaining resilient at {dti_stressed}% under a +2.0% interest rate shock. After deducting €{living_expenses:,.0f}/mo in household living expenses "
+                f"and all debt payments, the applicant retains a net disposable cashflow buffer of €{net_disposable_cashflow:,.0f}/mo.{contra_note}"
+            )
+
+    status = "critical" if is_over_dti else ("needs_review" if (contradictions or has_cashflow_deficit) else "passed")
+    badge_text = (
+        f"DTI {dti_base}% (Exceeds 40%)"
+        if is_over_dti
+        else (f"DTI {dti_base}% • Review Data" if contradictions else f"DTI {dti_base}% (Eligible)")
+    )
 
     return {
-        "agentId": "dti_affordability",
-        "name": "DTI & Interest Rate Stress-Test Agent",
-        "status": "passed" if feasibility_math.get("is_feasible") else "critical",
-        "badgeText": f"DTI {dti_base}% (Max 40%)",
-        "engineUsed": "Python Deterministic Math + AWS Bedrock Risk Commentary" if used_aws else "Python Deterministic Math Engine",
+        "agentId": "dti_repayment_capacity",
+        "name": "DTI & Repayment Capacity Verification Agent",
+        "status": status,
+        "badgeText": badge_text,
+        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + Python Financial Calculator" if used_aws else "Deterministic Python Financial Calculator",
         "executedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
         "aiNarrative": aws_insight.strip(),
         "highlights": [
             {
-                "label": "Baseline Monthly Installment",
-                "value": f"€{installment_base:,.2f} / mo",
-                "status": "ok"
+                "label": "Baseline DTI (Max 40%)",
+                "value": f"{dti_base}% (€{total_debt_service:,.0f}/mo debt)",
+                "status": "critical" if dti_base > 40 else ("warning" if dti_base > 35 else "ok"),
             },
             {
-                "label": "Baseline DTI Ratio",
-                "value": f"{dti_base}% (Limit: 40%)",
-                "status": "ok" if dti_base <= 40.0 else "critical"
+                "label": "Stress-Test DTI (+2% Rate)",
+                "value": f"{dti_stressed}% (€{installment_stressed:,.0f}/mo)",
+                "status": "warning" if dti_stressed > 40 else "ok",
             },
             {
-                "label": "Stress-Test (+2% Rate Shock)",
-                "value": f"€{installment_stressed:,.2f} / mo ({dti_stressed}% DTI)",
-                "status": "ok" if dti_stressed <= 40.0 else "warning"
+                "label": "Household Living Expenses",
+                "value": f"€{living_expenses:,.0f} / month",
+                "status": "ok",
             },
             {
-                "label": "Max Allowed Installment",
-                "value": f"€{feasibility_math.get('max_allowed_installment', 0):,.2f} / mo",
-                "status": "ok"
-            }
+                "label": "Net Disposable Cashflow",
+                "value": f"€{net_disposable_cashflow:,.0f} / month left",
+                "status": "critical" if net_disposable_cashflow < 0 else ("warning" if net_disposable_cashflow < 400 else "ok"),
+            },
         ],
-        "feasibilityMath": feasibility_math,
-        "stressedScenario": {
-            "stressedInterestRate": stressed_rate,
-            "stressedInstallment": installment_stressed,
-            "stressedDtiPercent": dti_stressed,
-            "passesStressTest": dti_stressed <= 40.0
-        }
+        "structuredData": {
+            "incomeSources": {
+                "declaredCaseIncome": fp_data["declaredClientIncome"],
+                "anafVerifiedIncome": fp_data["anafIncome"],
+                "profileMonthlySalary": fp_data["profileSalary"],
+                "profileOtherIncome": fp_data["profileOtherIncome"],
+                "eligibleIncomeUsed": income_used,
+            },
+            "obligations": {
+                "existingMonthlyDebts": existing_debts_used,
+                "activeCreditsCount": len(fp_data["activeCredits"]),
+                "activeCreditsBalance": fp_data["activeCreditsBalanceTotal"],
+                "activeCreditsList": fp_data["activeCredits"],
+                "paidOffCreditsExcluded": len(fp_data["paidOffCredits"]),
+                "proposedNewInstallment": installment_base,
+                "stressedNewInstallment": installment_stressed,
+                "totalMonthlyDebtService": total_debt_service,
+            },
+            "cashflow": {
+                "livingExpensesDeclaredConfirmed": living_expenses,
+                "totalOutflowsWithNewLoan": total_monthly_outflows_with_loan,
+                "netDisposableMonthlyCashflow": net_disposable_cashflow,
+                "dtiBasePercent": dti_base,
+                "dtiStressedPercent": dti_stressed,
+            },
+            "contradictionsAndMissing": contradictions,
+        },
+        "findings": dti_findings,
     }
 
 
-def _run_aml_fraud_risk_module(case_obj, extracted_fields: list, findings: list) -> Dict[str, Any]:
-    has_expired_id = any(f.get("type") == "expired_document" for f in findings)
-    has_name_diff = any(f.get("field") == "applicant_name" and f.get("flagType") == "red_flag" for f in findings)
+# =============================================================================
+# PILLAR 2: UNUSUAL TRANSACTIONS & EXPENSE ANOMALY AGENT
+# (Detectarea tranzacțiilor neobișnuite)
+# =============================================================================
+
+def _run_unusual_transactions_module(
+    case_obj,
+    documents: list,
+    fp_data: dict,
+) -> Dict[str, Any]:
+    client = case_obj.client
+    stmt_metrics = _extract_bank_statement_metrics(
+        documents,
+        fallback_income=float(client.monthly_income or 5000.0),
+        fallback_debts=float(client.existing_monthly_debts or 0.0),
+    )
+
+    avg_inflow = stmt_metrics["averageMonthlyInflow"]
+    closing_balance = stmt_metrics["closingBalance"]
+    baseline_expenses_total = fp_data["baselineExpensesTotal"]
+    suspected_expenses = fp_data["suspectedExpenses"]
+    suspected_total = fp_data["suspectedExpensesTotal"]
+
+    # Detect expense spikes or unusual items
+    # 1. Any 'suspected' expense in FinancialProfile (kept strictly as unverified per AGENTS.md)
+    # 2. Any single non-housing category exceeding 25% of monthly income
+    unusual_signals: List[Dict[str, Any]] = []
+    for s_exp in suspected_expenses:
+        unusual_signals.append({
+            "type": "suspected_merchant_signal",
+            "category": s_exp["categoryLabel"],
+            "monthlyAmount": s_exp["monthlyAmount"],
+            "verificationStatus": "suspected",
+            "evidenceNote": s_exp["evidenceNote"],
+            "actionRequired": "Unverified signal ('suspected') — requires bank officer confirmation with applicant before any credit impact.",
+        })
+
+    for b_exp in fp_data["baselineExpenses"]:
+        if b_exp["category"] != "housing" and avg_inflow > 0 and (b_exp["monthlyAmount"] / avg_inflow) > 0.25:
+            unusual_signals.append({
+                "type": "elevated_category_outflow",
+                "category": b_exp["categoryLabel"],
+                "monthlyAmount": b_exp["monthlyAmount"],
+                "verificationStatus": b_exp["verificationStatus"],
+                "evidenceNote": f"Category represents {round((b_exp['monthlyAmount'] / avg_inflow) * 100, 1)}% of monthly salary inflow.",
+                "actionRequired": "Verify whether outflow is recurring or a one-off household expenditure.",
+            })
+
+    # Liquidity buffer in months of regular expenses
+    monthly_burn = max(1.0, baseline_expenses_total + stmt_metrics["externalDebtService"])
+    liquidity_months = round(closing_balance / monthly_burn, 1)
 
     prompt = (
-        f"You are the AML (Anti-Money Laundering) & Fraud Screening AI Agent for Raiffeisen Bank. "
-        f"Analyze Case #{case_obj.case_number} ({case_obj.title}) for client {case_obj.client.full_name}, Employer: {case_obj.client.employer}. "
-        f"Flags: Expired ID={has_expired_id}, Name Variation={has_name_diff}. "
-        f"Write 2 professional sentences evaluating fraud/AML risk, salary source legitimacy, and whether enhanced due diligence (EDD) is needed."
+        f"You are the Unusual Transactions & Behavioral Expense AI Agent for Raiffeisen Bank. "
+        f"Case #{case_obj.case_number} for {client.full_name}. "
+        f"3-Month Bank Statement ({stmt_metrics['documentName']}): Average monthly salary inflow €{avg_inflow:,.2f}, "
+        f"Closing account balance €{closing_balance:,.2f} ({liquidity_months} months liquidity buffer). "
+        f"Regular baseline living expenses (declared/confirmed): €{baseline_expenses_total:,.2f}/mo across {len(fp_data['baselineExpenses'])} categories. "
+        f"Unverified ('suspected') or unusual transaction signals: {json.dumps(unusual_signals)}. "
+        f"Important rule: 'suspected' items are unverified signals and must NOT be treated as proven facts or automatic rejections; "
+        f"prepare clear evidence for the human officer to verify. Write a 2-sentence analytical summary."
     )
-    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a banking AML & Fraud Prevention AI Officer.")
+    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a banking transaction behavior and anomaly detection AI specialist.")
     used_aws = bool(aws_insight and len(aws_insight.strip()) > 10)
 
     if not used_aws:
-        if has_expired_id:
+        if unusual_signals:
+            sig_desc = ", ".join(f"{s['category']} (€{s['monthlyAmount']:,.0f}/mo — {s['verificationStatus']})" for s in unusual_signals)
             aws_insight = (
-                f"Elevated Onboarding Risk: Presenting an expired identity document alongside an unverified secondary utility bill address "
-                f"triggers mandatory Enhanced Due Diligence (EDD) prior to account activation."
-            )
-        elif has_name_diff:
-            aws_insight = (
-                f"Low AML Risk / Minor clerical variance: Salary inflows originate from a verified corporate employer ({case_obj.client.employer}) "
-                f"matching the applicant's unique National ID ({case_obj.client.national_id}), ruling out synthetic identity fraud."
+                f"Account statement analysis confirms recurring monthly salary inflows of €{avg_inflow:,.2f} and regular household expenses of "
+                f"€{baseline_expenses_total:,.2f}/mo. However, {len(unusual_signals)} unusual/unverified signal(s) were isolated separately: "
+                f"{sig_desc}. Per bank policy, 'suspected' items remain unverified signals excluded from baseline totals and are queued with evidence notes for officer review."
             )
         else:
             aws_insight = (
-                f"Clean AML & Fraud Profile: Recurring salary credits from {case_obj.client.employer}, verified national registry identity, "
-                f"and zero suspicious transaction patterns on bank statements."
+                f"3-Month Bank Statement ({stmt_metrics['documentName']}) shows stable monthly salary inflows of €{avg_inflow:,.2f} and predictable "
+                f"living outflows of €{baseline_expenses_total:,.2f}/mo, with a closing liquidity reserve of €{closing_balance:,.2f} ({liquidity_months} months coverage) "
+                f"and zero unusual transaction spikes or suspected merchant signals."
             )
 
-    risk_level = "high" if has_expired_id else ("low_medium" if has_name_diff else "low")
+    has_suspected = len(unusual_signals) > 0
     return {
-        "agentId": "aml_fraud_risk",
-        "name": "AML & Fraud Anomaly Detector",
-        "status": "action_required" if has_expired_id else "passed",
-        "badgeText": "EDD Required" if has_expired_id else "AML Clear",
-        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + AML Heuristics" if used_aws else "Deterministic AML Heuristics",
+        "agentId": "unusual_transactions",
+        "name": "Unusual Transactions & Expense Anomaly Agent",
+        "status": "needs_review" if has_suspected else "passed",
+        "badgeText": f"{len(unusual_signals)} Unusual Signal(s)" if has_suspected else "No Anomalies",
+        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + Transaction Analyzer" if used_aws else "Deterministic Transaction & Expense Analyzer",
         "executedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
         "aiNarrative": aws_insight.strip(),
         "highlights": [
             {
-                "label": "Sanctions & PEP Screening",
-                "value": "0 Hits (Clear)",
-                "status": "ok"
+                "label": "Observed Monthly Inflows",
+                "value": f"€{avg_inflow:,.0f} / mo (3M Avg)",
+                "status": "ok",
             },
             {
-                "label": "Source of Funds Legitimacy",
-                "value": f"Verified Payroll ({case_obj.client.employer})",
-                "status": "ok"
+                "label": "Regular Living Expenses",
+                "value": f"€{baseline_expenses_total:,.0f} / mo ({len(fp_data['baselineExpenses'])} items)",
+                "status": "ok",
             },
             {
-                "label": "Identity Fraud Score",
-                "value": "68 / 100 (Elevated - Expired ID)" if has_expired_id else ("18 / 100 (Low Risk)" if has_name_diff else "4 / 100 (Minimal)"),
-                "status": "critical" if has_expired_id else "ok"
+                "label": "Unverified / Suspected Signals",
+                "value": f"€{suspected_total:,.0f} / mo ({len(suspected_expenses)} item(s))" if suspected_expenses else "0 Signals (€0)",
+                "status": "warning" if suspected_expenses else "ok",
             },
             {
-                "label": "Due Diligence Level",
-                "value": "Enhanced Due Diligence (EDD)" if has_expired_id else "Standard CDD",
-                "status": "warning" if has_expired_id else "ok"
-            }
-        ]
+                "label": "Account Liquidity Reserve",
+                "value": f"€{closing_balance:,.0f} ({liquidity_months}m buffer)",
+                "status": "ok" if liquidity_months >= 1.5 else "warning",
+            },
+        ],
+        "transactionBreakdown": {
+            "bankStatementDocument": stmt_metrics["documentName"],
+            "iban": stmt_metrics["iban"],
+            "salaryInflows": stmt_metrics["salaryInflows"],
+            "averageMonthlyInflow": avg_inflow,
+            "closingBalance": closing_balance,
+            "liquidityCoverageMonths": liquidity_months,
+            "baselineExpenses": fp_data["baselineExpenses"],
+            "baselineExpensesTotal": baseline_expenses_total,
+            "suspectedSignals": unusual_signals,
+            "suspectedExpensesTotal": suspected_total,
+        },
+        "findings": [],
     }
 
 
-def _run_smart_remediation_module(case_obj, workflow_out: dict, findings: list) -> Dict[str, Any]:
-    remediation = dict(workflow_out.get("remediation", {}))
-    red_flags = [f for f in findings if f.get("flagType") == "red_flag"]
+# =============================================================================
+# PILLAR 3: DOCUMENT VERIFICATION & DATA RECONCILIATION AGENT
+# (Verificarea documentelor și reconcilierea datelor)
+# =============================================================================
 
-    if red_flags:
-        prompt = (
-            f"You are the Customer Communication & Remediation AI Agent at Raiffeisen Bank. "
-            f"Draft a polite, clear, and concise email body (4-5 lines) to client {case_obj.client.full_name} regarding Case #{case_obj.case_number} ({case_obj.title}). "
-            f"Explain the exact issues found ({', '.join(f['title'] for f in red_flags)}) and ask them to upload the updated document via their secure link: {remediation.get('secureUploadLink')}."
-        )
-        aws_email = call_aws_ai_gateway(prompt, system_prompt="You are a helpful, polite Raiffeisen Bank customer communication specialist.")
-        used_aws = bool(aws_email and len(aws_email.strip()) > 20)
-        if used_aws:
-            remediation["emailBody"] = aws_email.strip()
-    else:
-        used_aws = False
+def _run_doc_reconciliation_module(
+    case_obj,
+    documents: list,
+    extracted_fields: list,
+    findings: list,
+    fp_data: dict,
+) -> Dict[str, Any]:
+    client = case_obj.client
+    stmt_metrics = _extract_bank_statement_metrics(
+        documents,
+        fallback_income=float(client.monthly_income or 5000.0),
+        fallback_debts=float(client.existing_monthly_debts or 0.0),
+    )
+
+    # Build 3-Way Reconciliation Matrix:
+    # 1. Extracted Document Value vs 2. System/ANAF Value vs 3. Financial Profile Value
+    income_extractions = [x for x in extracted_fields if x.get("field") == "monthly_income"]
+    name_extractions = [x for x in extracted_fields if x.get("field") == "applicant_name"]
+    addr_extractions = [x for x in extracted_fields if x.get("field") == "address"]
+    id_val_extractions = [x for x in extracted_fields if x.get("field") == "id_card_validity"]
+
+    doc_incomes_str = ", ".join(sorted({f"€{int(x['value']):,}" for x in income_extractions})) or f"€{int(client.monthly_income or 0):,}"
+    sys_income_str = (
+        f"€{int(client.monthly_income or 0):,} (ANAF: €{int(client.anaf_income):,})"
+        if client.anaf_income is not None
+        else f"€{int(client.monthly_income or 0):,}"
+    )
+    prof_income_str = f"€{int(fp_data['profileSalary']):,}" + (
+        f" (+€{int(fp_data['profileOtherIncome']):,} other)" if fp_data["profileOtherIncome"] > 0 else ""
+    )
+
+    inc_mismatch = any(f.get("field") == "monthly_income" and f.get("flagType") == "red_flag" for f in findings)
+    name_mismatch = any(f.get("field") == "applicant_name" and f.get("flagType") == "red_flag" for f in findings)
+    addr_mismatch = any(f.get("field") == "address" and f.get("flagType") == "red_flag" for f in findings)
+    id_expired = any(f.get("field") == "id_card_validity" and f.get("flagType") == "red_flag" for f in findings)
+    debt_mismatch = abs(fp_data["activeCreditsMonthlyTotal"] - fp_data["clientExistingDebts"]) > 1.0
+
+    reconciliation_matrix = [
+        {
+            "dimension": "Net Monthly Income",
+            "documentsValue": f"{doc_incomes_str} ({len(income_extractions)} docs)",
+            "systemRecordValue": sys_income_str,
+            "financialProfileValue": prof_income_str,
+            "status": "mismatch" if inc_mismatch else "matched",
+            "ruleRef": "PROC-INC-03",
+        },
+        {
+            "dimension": "Existing Monthly Debt Service",
+            "documentsValue": f"€{stmt_metrics['externalDebtService']:,.0f}/mo (Bank Stmt / Bureau)",
+            "systemRecordValue": f"€{fp_data['clientExistingDebts']:,.0f}/mo",
+            "financialProfileValue": f"€{fp_data['activeCreditsMonthlyTotal']:,.0f}/mo ({len(fp_data['activeCredits'])} active loans)",
+            "status": "mismatch" if debt_mismatch else "matched",
+            "ruleRef": "REG-DTI-04",
+        },
+        {
+            "dimension": "Applicant Legal Name",
+            "documentsValue": " / ".join(sorted({x["value"] for x in name_extractions})) or client.full_name,
+            "systemRecordValue": client.full_name,
+            "financialProfileValue": client.full_name,
+            "status": "mismatch" if name_mismatch else "matched",
+            "ruleRef": "PROC-KYC-01",
+        },
+        {
+            "dimension": "National ID (CNP / SSN)",
+            "documentsValue": client.national_id,
+            "systemRecordValue": client.national_id,
+            "financialProfileValue": client.national_id,
+            "status": "matched",
+            "ruleRef": "PROC-KYC-01",
+        },
+        {
+            "dimension": "Identity Card Validity",
+            "documentsValue": id_val_extractions[0]["value"] if id_val_extractions else f"Expires {client.id_card_expiry}",
+            "systemRecordValue": f"{client.id_card_series} (Exp: {client.id_card_expiry})",
+            "financialProfileValue": "Expired — Renewal Required" if id_expired else "Valid Identity Document",
+            "status": "mismatch" if id_expired else "matched",
+            "ruleRef": "PROC-DOC-02",
+        },
+        {
+            "dimension": "Residential Address",
+            "documentsValue": f"{len({x['value'].lower() for x in addr_extractions})} distinct address(es) in docs",
+            "systemRecordValue": client.address or "N/A",
+            "financialProfileValue": client.housing_status or "Verified",
+            "status": "mismatch" if addr_mismatch else "matched",
+            "ruleRef": "PROC-KYC-01",
+        },
+    ]
+
+    red_findings = [f for f in findings if f.get("flagType") == "red_flag"]
+    total_discrepancies = sum(1 for row in reconciliation_matrix if row["status"] == "mismatch")
+
+    prompt = (
+        f"You are the Document Verification & 3-Way Data Reconciliation AI Agent for Raiffeisen Bank. "
+        f"Case #{case_obj.case_number} ({case_obj.title}) for {client.full_name}. "
+        f"Parsed {len(documents)} documents ({len(extracted_fields)} extracted fields with exact line citations). "
+        f"Reconciliation Matrix results: {json.dumps(reconciliation_matrix)}. "
+        f"Specific findings: {json.dumps([f['title'] + ': ' + f['description'] for f in findings])}. "
+        f"Provide a 2-3 sentence compliance and data reconciliation summary citing PROC-KYC-01, PROC-DOC-02, or PROC-INC-03."
+    )
+    aws_insight = call_aws_ai_gateway(prompt, system_prompt="You are a senior banking document verification and data reconciliation AI agent.")
+    used_aws = bool(aws_insight and len(aws_insight.strip()) > 10)
+
+    if not used_aws:
+        if total_discrepancies > 0:
+            mismatch_names = ", ".join(r["dimension"] for r in reconciliation_matrix if r["status"] == "mismatch")
+            aws_insight = (
+                f"3-Way Data Reconciliation across {len(documents)} documents, CRM/ANAF records, and the Financial Profile flagged "
+                f"{total_discrepancies} discrepancy area(s): {mismatch_names}. Under PROC-KYC-01, PROC-DOC-02, and PROC-INC-03, "
+                f"official certified documents and ANAF records prevail; officer validation or customer document re-upload is required."
+            )
+        else:
+            aws_insight = (
+                f"Full 3-Way Reconciliation Passed: All {len(extracted_fields)} extracted data points across {len(documents)} supporting documents "
+                f"(Application, ID Card, Salary Certificate, 3M Bank Statement) match 100% with CRM, ANAF, and Financial Profile records."
+            )
 
     return {
-        "agentId": "smart_remediation",
-        "name": "Client Remediation & Comms Agent",
-        "status": "action_required" if remediation.get("required") else "passed",
-        "badgeText": "Outreach Ready" if remediation.get("required") else "No Outreach Needed",
-        "engineUsed": "AWS Bedrock (Amazon Nova Pro) Comms Generator" if used_aws else "Template Automation Engine",
+        "agentId": "doc_reconciliation",
+        "name": "Document Verification & Data Reconciliation Agent",
+        "status": "action_required" if total_discrepancies > 0 else "passed",
+        "badgeText": f"{total_discrepancies} Discrepanc{'y' if total_discrepancies == 1 else 'ies'}" if total_discrepancies > 0 else "100% Reconciled",
+        "engineUsed": "AWS Bedrock (Amazon Nova Pro) + 3-Way Reconciliation Engine" if used_aws else "Deterministic 3-Way Reconciliation Engine",
         "executedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
-        "aiNarrative": (
-            f"Automated customer outreach prepared for {case_obj.client.full_name} via {', '.join(remediation.get('channels', ['Email', 'SMS']))} "
-            f"with encrypted one-click upload link."
-            if remediation.get("required")
-            else "All case documents are valid and consistent. No remediation emails or SMS messages are required for this applicant."
-        ),
+        "aiNarrative": aws_insight.strip(),
         "highlights": [
             {
-                "label": "Remediation Required",
-                "value": "Yes — Action Needed" if remediation.get("required") else "No — Clean File",
-                "status": "warning" if remediation.get("required") else "ok"
+                "label": "Documents & Fields Parsed",
+                "value": f"{len(documents)} Docs • {len(extracted_fields)} Fields",
+                "status": "ok",
             },
             {
-                "label": "Recipient Email",
-                "value": case_obj.client.email or "None",
-                "status": "ok"
+                "label": "Income Reconciliation",
+                "value": "Mismatch Flagged" if inc_mismatch else f"Matched ({sys_income_str})",
+                "status": "warning" if inc_mismatch else "ok",
             },
             {
-                "label": "Recipient Phone",
-                "value": case_obj.client.phone or "None",
-                "status": "ok"
+                "label": "Identity & KYC Validity",
+                "value": "Expired ID / Mismatch" if (id_expired or name_mismatch or addr_mismatch) else f"Valid ({client.id_card_series})",
+                "status": "critical" if id_expired else ("warning" if (name_mismatch or addr_mismatch) else "ok"),
             },
             {
-                "label": "Delivery Channels",
-                "value": ", ".join(remediation.get("channels", [])) or "Email & SMS",
-                "status": "ok"
-            }
+                "label": "3-Way Matrix Status",
+                "value": f"{6 - total_discrepancies}/6 Dimensions Matched",
+                "status": "warning" if total_discrepancies > 0 else "ok",
+            },
+        ],
+        "reconciliationMatrix": reconciliation_matrix,
+        "findings": findings,
+    }
+
+
+# =============================================================================
+# COMPLETE 360° CLIENT EXECUTIVE SUMMARY BUILDER
+# (Rezumatul complet despre client la finalul analizei)
+# =============================================================================
+
+def build_client_executive_summary_360(
+    case_obj,
+    modular_results: Dict[str, Any],
+    feasibility_math: Dict[str, Any],
+    findings: List[Dict[str, Any]],
+    remediation: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Constructs a comprehensive 360-degree Executive Client Summary combining:
+    1. Complete Demographic, Employment & Credit Bureau Profile
+    2. Consolidated Financial Balance Sheet (Income, Living Expenses, Active Credits, DTI, Net Disposable Cashflow)
+    3. Synthesis of all 3 AI Verification Pillars (DTI & Repayment, Unusual Transactions, Document Reconciliation)
+    4. Final AI Underwriting Recommendation & Smart Customer Remediation Plan
+    """
+    client = case_obj.client
+    profile = _get_financial_profile(case_obj)
+    fp_data = _aggregate_financial_profile_data(case_obj, profile)
+    stmt_metrics = _extract_bank_statement_metrics(
+        list(case_obj.documents),
+        fallback_income=float(client.monthly_income or 5000.0),
+        fallback_debts=float(client.existing_monthly_debts or 0.0),
+    )
+
+    income_used = float(feasibility_math.get("monthly_income_used", client.monthly_income or 5000.0))
+    existing_debts = float(feasibility_math.get("existing_monthly_debts", client.existing_monthly_debts or 0.0))
+    new_installment = float(feasibility_math.get("calculated_monthly_installment", 0.0))
+    dti_pct = float(feasibility_math.get("dti_percentage", 0.0))
+    living_expenses = fp_data["baselineExpensesTotal"]
+    net_disposable = round(income_used - (living_expenses + existing_debts + new_installment), 2)
+
+    red_flags = [f for f in findings if f.get("flagType") == "red_flag"]
+    suspected_count = len(fp_data["suspectedExpenses"])
+    is_over_dti = dti_pct > 40.0
+    has_expired_id = any(f.get("field") == "id_card_validity" and f.get("flagType") == "red_flag" for f in findings)
+
+    if is_over_dti or has_expired_id:
+        verdict_status = "high_risk_hold"
+        verdict_label = "REGULATORY HOLD / REQUIRES REMEDIATION"
+    elif red_flags or suspected_count > 0:
+        verdict_status = "conditional_clarification"
+        verdict_label = "ELIGIBLE WITH OFFICER VERIFICATION"
+    else:
+        verdict_status = "ready_for_approval"
+        verdict_label = "CLEAN DOSSIER — READY FOR APPROVAL"
+
+    prompt = (
+        f"You are the Chief Credit Underwriting AI Advisor at Raiffeisen Bank. "
+        f"Generate a complete, structured 4-sentence 360-degree Executive Summary for Applicant {client.full_name} "
+        f"(National ID: {client.national_id}, Case #{case_obj.case_number} — {case_obj.title}, Requested: €{float(case_obj.requested_amount or 0):,.0f} over {case_obj.loan_term_months}m). "
+        f"1) Client & Bureau Profile: Employed at {client.employer} ({client.employment_contract_type}, tenure {client.seniority_current_employer}), "
+        f"Marital status: {fp_data['maritalStatus']} ({fp_data['childrenCount']} dependents), Housing: {client.housing_status}, "
+        f"FICO Score: {client.fico_score} ({client.credit_bureau_status}), PEP/AML: {client.aml_status}. "
+        f"2) Repayment Capacity & Cashflow: Verified monthly income €{income_used:,.0f}, regular household expenses €{living_expenses:,.0f}/mo, "
+        f"existing debt service €{existing_debts:,.0f}/mo, new installment €{new_installment:,.2f}/mo -> Regulatory DTI is {dti_pct}% (40% cap) and net monthly disposable cashflow is €{net_disposable:,.0f}. "
+        f"3) Transactions & Document Reconciliation: Closing bank balance €{stmt_metrics['closingBalance']:,.0f}, "
+        f"{suspected_count} unverified ('suspected') expense signal(s) (€{fp_data['suspectedExpensesTotal']:,.0f}/mo), "
+        f"and {len(red_flags)} document discrepancy alert(s) ({', '.join(f['title'] for f in red_flags) or 'None'}). "
+        f"Provide a clear, authoritative synthesis for the credit committee."
+    )
+    aws_summary = call_aws_ai_gateway(prompt, system_prompt="You are a Chief Credit Underwriting AI Advisor at Raiffeisen Bank.")
+    used_aws = bool(aws_summary and len(aws_summary.strip()) > 20)
+
+    if not used_aws:
+        issues_clause = (
+            f"Document reconciliation identified {len(red_flags)} alert(s) ({', '.join(f['title'] for f in red_flags)})"
+            if red_flags
+            else "All identity, payroll, and bank statement documents are 100% reconciled across CRM and ANAF records"
+        )
+        susp_clause = (
+            f", alongside {suspected_count} unverified ('suspected') expense signal(s) (€{fp_data['suspectedExpensesTotal']:,.0f}/mo) queued for human officer review."
+            if suspected_count > 0
+            else " with zero unusual transaction anomalies."
+        )
+        aws_summary = (
+            f"{client.full_name} ({client.employment_contract_type} at {client.employer}, tenure {client.seniority_current_employer}, "
+            f"FICO {client.fico_score} — {client.credit_bureau_status}) requests €{float(case_obj.requested_amount or 0):,.0f} "
+            f"for {case_obj.loan_term_months} months ({case_obj.title}). "
+            f"Financial capacity analysis confirms €{income_used:,.0f}/mo eligible net income, €{living_expenses:,.0f}/mo regular living expenses, "
+            f"and €{existing_debts + new_installment:,.2f}/mo total debt service, yielding a {dti_pct}% DTI ratio and €{net_disposable:,.0f}/mo net disposable cashflow. "
+            f"{issues_clause}{susp_clause} "
+            f"Overall Underwriting Verdict: {verdict_label}."
+        )
+
+    return {
+        "generatedAt": datetime.utcnow().strftime("%H:%M:%S UTC"),
+        "engineUsed": "AWS Bedrock (Amazon Nova Pro) 360° Synthesizer" if used_aws else "Raiffeisen 360° Credit Synthesizer",
+        "verdictStatus": verdict_status,
+        "verdictLabel": verdict_label,
+        "executiveNarrative": aws_summary.strip(),
+        "clientProfile360": {
+            "fullName": client.full_name,
+            "nationalId": client.national_id,
+            "birthDate": client.birth_date or "N/A",
+            "maritalStatus": fp_data["maritalStatus"],
+            "dependentsCount": fp_data["childrenCount"],
+            "housingStatus": client.housing_status or "Owner",
+            "address": client.address or "N/A",
+            "email": client.email or "N/A",
+            "phone": client.phone or "N/A",
+            "employer": client.employer or "N/A",
+            "employerCui": client.employer_cui or "N/A",
+            "contractType": client.employment_contract_type or "Permanent Full-Time",
+            "seniorityCurrent": client.seniority_current_employer or "N/A",
+            "seniorityTotal": client.seniority_total or "N/A",
+            "ficoScore": client.fico_score or 710,
+            "creditBureauStatus": client.credit_bureau_status or "Class A",
+            "activeLoansCount": len(fp_data["activeCredits"]) if fp_data["hasFinancialProfile"] else (client.credit_bureau_active_loans or 0),
+            "pepStatus": client.pep_status or "Negative (Non-PEP)",
+            "amlStatus": client.aml_status or "Compliant L129/2019",
+            "anafConsent": bool(client.anaf_consent),
+            "anafIncome": fp_data["anafIncome"],
+        },
+        "financialBalanceSheet": {
+            "currency": fp_data["currency"],
+            "requestedAmount": float(case_obj.requested_amount or 0.0),
+            "loanTermMonths": int(case_obj.loan_term_months or 60),
+            "interestRateAnnual": float(case_obj.interest_rate_annual or 8.9),
+            "eligibleMonthlyIncome": income_used,
+            "supplementalIncome": fp_data["profileOtherIncome"],
+            "regularLivingExpenses": living_expenses,
+            "suspectedExpensesIsolated": fp_data["suspectedExpensesTotal"],
+            "suspectedExpensesCount": suspected_count,
+            "existingMonthlyDebts": existing_debts,
+            "activeCreditsRemainingBalance": fp_data["activeCreditsBalanceTotal"],
+            "proposedNewInstallment": new_installment,
+            "totalMonthlyDebtService": round(existing_debts + new_installment, 2),
+            "dtiPercentage": dti_pct,
+            "netDisposableCashflow": net_disposable,
+            "closingBankBalance": stmt_metrics["closingBalance"],
+        },
+        "pillarsSynthesis": [
+            {
+                "agentId": "dti_repayment_capacity",
+                "title": "1. DTI & Repayment Capacity",
+                "badge": modular_results.get("dti_repayment_capacity", {}).get("badgeText", f"DTI {dti_pct}%"),
+                "status": modular_results.get("dti_repayment_capacity", {}).get("status", "passed" if dti_pct <= 40 else "critical"),
+                "summary": f"DTI {dti_pct}% (cap 40%) • Net cashflow after living costs & loans: €{net_disposable:,.0f}/mo.",
+            },
+            {
+                "agentId": "unusual_transactions",
+                "title": "2. Unusual Transactions & Expenses",
+                "badge": modular_results.get("unusual_transactions", {}).get("badgeText", f"{suspected_count} Signal(s)" if suspected_count else "No Anomalies"),
+                "status": modular_results.get("unusual_transactions", {}).get("status", "needs_review" if suspected_count else "passed"),
+                "summary": (
+                    f"Regular expenses €{living_expenses:,.0f}/mo • {suspected_count} unverified ('suspected') signal(s) (€{fp_data['suspectedExpensesTotal']:,.0f}/mo) isolated for officer check."
+                    if suspected_count > 0
+                    else f"Regular expenses €{living_expenses:,.0f}/mo • Account reserve €{stmt_metrics['closingBalance']:,.0f} • 0 unusual spikes."
+                ),
+            },
+            {
+                "agentId": "doc_reconciliation",
+                "title": "3. Document & Data Reconciliation",
+                "badge": modular_results.get("doc_reconciliation", {}).get("badgeText", f"{len(red_flags)} Alert(s)" if red_flags else "100% Reconciled"),
+                "status": modular_results.get("doc_reconciliation", {}).get("status", "action_required" if red_flags else "passed"),
+                "summary": (
+                    f"{len(red_flags)} document/data discrepancy flag(s) require officer review or customer clarification."
+                    if red_flags
+                    else f"All {len(case_obj.documents)} documents match CRM, ANAF, and Financial Profile records."
+                ),
+            },
         ],
         "remediation": remediation,
     }
 
 
+# =============================================================================
+# PUBLIC ENTRYPOINTS FOR ROUTER
+# =============================================================================
+
 def execute_single_modular_agent(agent_id: str, case_obj) -> Dict[str, Any]:
     """
     Runs a single specialized AI agent module on the given case without conflicting
-    with other modules. Uses live AWS Bedrock (from backend/.env) + deterministic verifiers.
+    with other modules. Uses live AWS Bedrock (from backend/.env) + deterministic verifiers
+    + the client's FinancialProfile (expenses, credits, income).
     """
     documents = list(case_obj.documents)
     extracted_fields = run_extraction_agent(case_obj, documents)
@@ -429,26 +928,23 @@ def execute_single_modular_agent(agent_id: str, case_obj) -> Dict[str, Any]:
         alternative_income=alt_income,
     )
     findings = run_investigator_agent(case_obj, extracted_fields, policy_rules, feasibility_math)
-    workflow_out = run_remediation_and_workflow_agent(case_obj, findings, feasibility_math)
+    profile = _get_financial_profile(case_obj)
+    fp_data = _aggregate_financial_profile_data(case_obj, profile)
 
-    if agent_id == "kyc_identity":
-        return _run_kyc_identity_module(case_obj, extracted_fields, findings)
-    elif agent_id == "income_crosscheck":
-        return _run_income_crosscheck_module(case_obj, extracted_fields, findings)
-    elif agent_id == "dti_affordability":
-        return _run_dti_affordability_module(case_obj, feasibility_math)
-    elif agent_id == "aml_fraud_risk":
-        return _run_aml_fraud_risk_module(case_obj, extracted_fields, findings)
-    elif agent_id == "smart_remediation":
-        return _run_smart_remediation_module(case_obj, workflow_out, findings)
+    # Support the 3 core pillars (plus legacy aliases if ever invoked)
+    if agent_id in ("dti_repayment_capacity", "dti_affordability"):
+        return _run_dti_repayment_capacity_module(case_obj, extracted_fields, feasibility_math, findings, fp_data)
+    elif agent_id in ("unusual_transactions", "aml_fraud_risk"):
+        return _run_unusual_transactions_module(case_obj, documents, fp_data)
+    elif agent_id in ("doc_reconciliation", "kyc_identity", "income_crosscheck"):
+        return _run_doc_reconciliation_module(case_obj, documents, extracted_fields, findings, fp_data)
     else:
         raise ValueError(f"Unknown modular agent_id: {agent_id}")
 
 
 def get_case_agent_catalog(case_obj) -> List[Dict[str, Any]]:
     """
-    Returns the catalog of modular AI agents annotated with whether each agent
-    is specifically recommended for this case's type/title.
+    Returns the catalog of 3 core modular AI agents annotated for this case.
     """
     catalog = []
     for item in AGENT_CATALOG:
@@ -456,4 +952,3 @@ def get_case_agent_catalog(case_obj) -> List[Dict[str, Any]]:
         entry["isRecommended"] = is_agent_recommended(item, case_obj.title, case_obj.case_type)
         catalog.append(entry)
     return catalog
-

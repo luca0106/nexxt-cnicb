@@ -163,7 +163,7 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
 
             # 1. Extract Applicant Name
             if "Applicant Name:" in clean_line or "Full Name:" in clean_line:
-                val = clean_line.split(":")[-1].strip()
+                val = clean_line.split("|")[0].split(":", 1)[-1].strip()
                 extracted.append({
                     "field": "applicant_name",
                     "label": "Applicant Name",
@@ -178,7 +178,7 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     "confidence": 0.99
                 })
             elif "Employee:" in clean_line:
-                val = clean_line.split("Employee:")[-1].strip()
+                val = clean_line.split("|")[0].split("Employee:")[-1].strip()
                 extracted.append({
                     "field": "applicant_name",
                     "label": "Applicant Name",
@@ -281,8 +281,8 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                         pass
 
             # 4. Extract Address
-            if any(k in clean_line for k in ["Declared Residential Address:", "Residential Address:", "Permanent Residence:", "Service Location Address:"]):
-                addr_val = clean_line.split(":", 1)[-1].strip()
+            if any(k in clean_line for k in ["Declared Residential Address:", "Residential Address:", "Permanent Residence:", "Service Location Address:", "Mortgaged Property Address:"]):
+                addr_val = clean_line.split("|")[0].split(":", 1)[-1].strip()
                 if addr_val:
                     extracted.append({
                         "field": "address",
@@ -299,8 +299,8 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     })
 
             # 5. Extract ID Card Validity
-            if "Validity Period:" in clean_line or "Valid Until:" in clean_line:
-                val_str = clean_line.split(":")[-1].strip()
+            if "Validity Period:" in clean_line or "Valid Until:" in clean_line or "ID Card Validity:" in clean_line:
+                val_str = clean_line.split(":", 1)[-1].strip()
                 extracted.append({
                     "field": "id_card_validity",
                     "label": "Identity Card Validity",

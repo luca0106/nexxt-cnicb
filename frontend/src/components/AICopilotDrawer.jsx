@@ -24,7 +24,14 @@ import {
   ChevronUp,
   RefreshCw,
   Layers,
-  Cpu
+  Cpu,
+  User,
+  Briefcase,
+  Building2,
+  CreditCard,
+  TrendingUp,
+  FileSpreadsheet,
+  ScanSearch
 } from 'lucide-react';
 import {
   fetchCaseAgents,
@@ -37,43 +44,30 @@ import {
 
 const DEFAULT_AGENT_CATALOG = [
   {
-    agentId: 'kyc_identity',
-    name: 'KYC & Identity Verification Agent',
-    shortLabel: 'KYC & Identity Audit',
-    color: 'blue',
-    description: 'Audits National ID validity, expiration dates, legal name consistency across documents, and residential address matching.',
-    isRecommended: true,
-  },
-  {
-    agentId: 'income_crosscheck',
-    name: 'Income & Employer Cross-Check Agent',
-    shortLabel: 'Income Cross-Check',
-    color: 'amber',
-    description: 'Reconciles net monthly income and employer data across Application Forms, Salary Certificates, and Bank Statements.',
-    isRecommended: true,
-  },
-  {
-    agentId: 'dti_affordability',
-    name: 'DTI & Interest Rate Stress-Test Agent',
-    shortLabel: 'DTI & Stress-Test',
+    agentId: 'dti_repayment_capacity',
+    name: 'DTI & Repayment Capacity Verification Agent',
+    shortLabel: '1. DTI & Repayment Capacity',
     color: 'emerald',
-    description: 'Executes deterministic Python annuity math, 40% regulatory DTI ceiling verification, and +2.0% interest rate shock simulation.',
+    description:
+      'Structures income sources, active loan installments, and household living expenses; computes regulatory DTI (40% cap), +2% rate stress-test, and net disposable cashflow.',
     isRecommended: true,
   },
   {
-    agentId: 'aml_fraud_risk',
-    name: 'AML & Fraud Anomaly Detector',
-    shortLabel: 'AML & Fraud Screening',
+    agentId: 'unusual_transactions',
+    name: 'Unusual Transactions & Expense Anomaly Agent',
+    shortLabel: '2. Unusual Transactions',
     color: 'purple',
-    description: 'Screens account statements and applicant metadata for anti-money laundering (AML) flags, identity anomalies, and behavioral risks.',
+    description:
+      'Analyzes 3-month bank statement inflows/outflows, aggregates baseline living expenses, detects unusual spending variations, and isolates unverified ("suspected") signals for officer review.',
     isRecommended: true,
   },
   {
-    agentId: 'smart_remediation',
-    name: 'Client Remediation & Comms Agent',
-    shortLabel: 'Smart Remediation',
-    color: 'rose',
-    description: 'Drafts personalized customer SMS & Email notifications with encrypted document re-upload links via AWS Bedrock.',
+    agentId: 'doc_reconciliation',
+    name: 'Document Verification & Data Reconciliation Agent',
+    shortLabel: '3. Document Reconciliation',
+    color: 'amber',
+    description:
+      'Extracts structured fields from attached financial and KYC documents, cross-checks them against internal CRM, ANAF, and Financial Profile records, and flags discrepancies.',
     isRecommended: true,
   },
 ];
@@ -93,7 +87,7 @@ export default function AICopilotDrawer({
   const [runningAll, setRunningAll] = useState(false);
   const [runningAgentId, setRunningAgentId] = useState(null);
   const [expandedModules, setExpandedModules] = useState({});
-  const [activeTab, setActiveTab] = useState('modular_hub'); // modular_hub, findings, math, remediation, pii_data, trace
+  const [activeTab, setActiveTab] = useState('modular_hub'); // modular_hub, summary_360, findings, math, remediation, pii_data, trace
   const [showMaskedPii, setShowMaskedPii] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [officerComment, setOfficerComment] = useState('');
@@ -158,7 +152,7 @@ export default function AICopilotDrawer({
     }
   };
 
-  // Run all agents in the suite
+  // Run all 3 core pillars + generate full 360° client executive summary
   const handleRunAllAgents = async () => {
     if (!caseData || runningAll || runningAgentId) return;
     try {
@@ -173,7 +167,7 @@ export default function AICopilotDrawer({
         setExpandedModules(allOpen);
       }
       if (onAnalysisUpdated) onAnalysisUpdated(res);
-      showToast('All Modular AI Agents executed successfully via AWS Bedrock!');
+      showToast('All 3 Core AI Pillars & 360° Client Executive Summary completed!');
     } catch (err) {
       console.error(err);
       showToast('Error executing full AI suite.');
@@ -263,11 +257,288 @@ export default function AICopilotDrawer({
   const redFlags = analysis?.findings?.filter((f) => f.flagType === 'red_flag') || [];
   const greenFlags = analysis?.findings?.filter((f) => f.flagType === 'green_flag') || [];
   const modularResults = analysis?.metrics?.modularResults || {};
-  const executedModulesCount = Object.keys(modularResults).length;
+  const clientSummary360 = analysis?.metrics?.clientSummary360 || null;
+  const executedModulesCount = agentCatalog.filter((a) => Boolean(modularResults[a.agentId])).length;
+
+  const renderClientExecutiveSummary360 = (summaryObj) => {
+    if (!summaryObj) return null;
+    const prof = summaryObj.clientProfile360 || {};
+    const fin = summaryObj.financialBalanceSheet || {};
+    const pillars = summaryObj.pillarsSynthesis || [];
+    const rem = summaryObj.remediation || analysis?.remediation || {};
+
+    const isHold = summaryObj.verdictStatus === 'high_risk_hold';
+    const isConditional = summaryObj.verdictStatus === 'conditional_clarification';
+
+    return (
+      <div className="rounded-2xl border-2 border-amber-400/50 bg-gradient-to-b from-[#0b152c] to-[#070d1c] shadow-2xl overflow-hidden space-y-5 p-4 sm:p-6">
+        {/* Top Banner of 360° Summary */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#1d315c]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-400/20 border border-amber-400/40 text-amber-300 flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Complete 360° Client Executive Summary
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                  {summaryObj.engineUsed}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Consolidated dossier synthesis: Identity, Employment, Credit Bureau, Repayment Cashflow & Transaction Behavior
+              </p>
+            </div>
+          </div>
+
+          <span
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border ${
+              isHold
+                ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                : isConditional
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+            }`}
+          >
+            {summaryObj.verdictLabel}
+          </span>
+        </div>
+
+        {/* Executive AI Synthesis Paragraph */}
+        <div className="p-4 rounded-xl bg-[#050a15] border border-amber-400/30 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-amber-300">
+            <span>Executive Underwriting Synthesis (AWS Bedrock)</span>
+            <span className="font-mono text-slate-400">{summaryObj.generatedAt}</span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-100 leading-relaxed">
+            {summaryObj.executiveNarrative}
+          </p>
+        </div>
+
+        {/* Section 1: 360° Client Demographic, Employment & Credit Bureau Profile */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+            <User className="w-4 h-4 text-blue-400" />
+            <span>1. Client Demographic, Employment & Credit Bureau Profile</span>
+          </div>
+          <div
+            className={`grid gap-2.5 ${
+              viewMode === 'expanded' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
+            }`}
+          >
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Applicant & National ID</span>
+              <span className="font-bold text-white block mt-0.5 truncate" title={prof.fullName}>
+                {prof.fullName}
+              </span>
+              <span className="text-[11px] text-slate-400 font-mono block truncate">
+                ID: {prof.nationalId} • Born {prof.birthDate}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Employer & Contract Tenure</span>
+              <span className="font-bold text-white block mt-0.5 truncate" title={prof.employer}>
+                {prof.employer}
+              </span>
+              <span className="text-[11px] text-blue-300 block truncate" title={`${prof.contractType} • ${prof.seniorityCurrent}`}>
+                {prof.contractType} • {prof.seniorityCurrent}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Household & Housing Status</span>
+              <span className="font-bold text-white block mt-0.5 truncate">
+                {prof.maritalStatus} • {prof.dependentsCount} Dependent(s)
+              </span>
+              <span className="text-[11px] text-slate-300 block truncate" title={prof.housingStatus}>
+                {prof.housingStatus}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Credit Bureau & FICO Score</span>
+              <span
+                className={`font-bold block mt-0.5 ${
+                  (prof.ficoScore || 700) >= 680
+                    ? 'text-emerald-400'
+                    : (prof.ficoScore || 700) >= 620
+                    ? 'text-amber-300'
+                    : 'text-red-400'
+                }`}
+              >
+                FICO {prof.ficoScore} / 850
+              </span>
+              <span className="text-[11px] text-slate-300 block truncate" title={prof.creditBureauStatus}>
+                {prof.creditBureauStatus}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Consolidated Financial Balance Sheet & Disposable Cashflow */}
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <span>2. Consolidated Monthly Cashflow & Debt Sustainability</span>
+          </div>
+          <div
+            className={`grid gap-2.5 ${
+              viewMode === 'expanded' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-2'
+            }`}
+          >
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Verified Monthly Income</span>
+              <span className="font-bold text-emerald-300 text-sm block mt-0.5">
+                €{Number(fin.eligibleMonthlyIncome || 0).toLocaleString('en-US')} / mo
+              </span>
+              <span className="text-[11px] text-slate-400 block truncate">
+                {fin.supplementalIncome > 0
+                  ? `+ €${Number(fin.supplementalIncome).toLocaleString('en-US')} supplemental`
+                  : prof.anafConsent
+                  ? 'ANAF Electronically Verified'
+                  : 'Salary Certificate Verified'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Regular Household Expenses</span>
+              <span className="font-bold text-white text-sm block mt-0.5">
+                €{Number(fin.regularLivingExpenses || 0).toLocaleString('en-US')} / mo
+              </span>
+              <span className="text-[11px] text-slate-400 block truncate">
+                {fin.suspectedExpensesCount > 0
+                  ? `+ €${fin.suspectedExpensesIsolated} suspected (isolated)`
+                  : 'Declared & confirmed baseline'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Total Debt Service & DTI</span>
+              <span
+                className={`font-bold text-sm block mt-0.5 ${
+                  (fin.dtiPercentage || 0) > 40 ? 'text-red-400' : 'text-blue-300'
+                }`}
+              >
+                {fin.dtiPercentage}% DTI (€{Number(fin.totalMonthlyDebtService || 0).toLocaleString('en-US')}/mo)
+              </span>
+              <span className="text-[11px] text-slate-400 block truncate">
+                New: €{fin.proposedNewInstallment}/mo + Existing: €{fin.existingMonthlyDebts}/mo
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#060c1a] border border-[#172646] text-xs min-w-0">
+              <span className="text-slate-400 block text-[11px]">Net Disposable Cashflow</span>
+              <span
+                className={`font-bold text-sm block mt-0.5 ${
+                  (fin.netDisposableCashflow || 0) < 300 ? 'text-amber-300' : 'text-emerald-400'
+                }`}
+              >
+                €{Number(fin.netDisposableCashflow || 0).toLocaleString('en-US')} / mo left
+              </span>
+              <span className="text-[11px] text-slate-400 block truncate">
+                Account Reserve: €{Number(fin.closingBankBalance || 0).toLocaleString('en-US')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: 3-Pillar Verification Status Matrix */}
+        {pillars.length > 0 && (
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span>3. Synthesis Across the 3 Core Verification Pillars</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {pillars.map((p) => {
+                const isWarn = p.status === 'action_required' || p.status === 'needs_review' || p.status === 'critical';
+                return (
+                  <div
+                    key={p.agentId}
+                    className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                      isWarn
+                        ? 'bg-amber-950/20 border-amber-500/35'
+                        : 'bg-emerald-950/15 border-emerald-500/30'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-white">{p.title}</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isWarn
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          }`}
+                        >
+                          {p.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1">{p.summary}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveTab('modular_hub');
+                        setExpandedModules((prev) => ({ ...prev, [p.agentId]: true }));
+                      }}
+                      className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 shrink-0 underline cursor-pointer self-start sm:self-center"
+                    >
+                      Inspect Pillar →
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Section 4: Integrated Smart Remediation Action (if discrepancies exist) */}
+        {rem?.required && (
+          <div className="p-4 rounded-xl bg-[#070f20] border border-amber-400/40 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider">
+                <Send className="w-4 h-4" />
+                <span>Recommended Remediation Outreach ({rem.recipientEmail} • {rem.recipientPhone})</span>
+              </div>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-400/15 text-amber-300">
+                {rem.status === 'sent_by_officer' ? `SENT (${rem.sentAt})` : 'READY FOR DISPATCH'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300">
+              Trigger Reason: <strong className="text-white">{rem.triggerReason}</strong>
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={handleSendRemediation}
+                disabled={actionLoading || rem.status === 'sent_by_officer'}
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>
+                  {rem.status === 'sent_by_officer'
+                    ? 'Clarification Link Already Sent'
+                    : 'Send Email & SMS Clarification Link'}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('remediation')}
+                className="px-3 py-2 rounded-xl bg-[#0c1730] hover:bg-[#132448] border border-[#223867] text-xs font-semibold text-slate-200 cursor-pointer"
+              >
+                Preview Full Email & SMS Draft
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="w-full rounded-2xl bg-[#080f20] border-2 border-amber-400/40 shadow-[0_10px_50px_rgba(0,0,0,0.75)] overflow-hidden flex flex-col">
-      {/* Top Extension Header (No manual API key input — uses backend AWS key automatically) */}
+      {/* Top Extension Header */}
       <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#0e172c] via-[#131e38] to-[#1a1c2e] border-b border-[#223254] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-amber-500/20 shrink-0">
@@ -279,7 +550,7 @@ export default function AICopilotDrawer({
                 Raiffeisen AI Copilot
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                Modular Multi-Agent Hub
+                3-Pillar Underwriting & 360° Hub
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
@@ -303,7 +574,7 @@ export default function AICopilotDrawer({
             className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
           >
             <Play className={`w-3.5 h-3.5 fill-slate-950 ${runningAll ? 'animate-spin' : ''}`} />
-            <span>{runningAll ? 'Running All Agents...' : 'Run Full Agent Suite'}</span>
+            <span>{runningAll ? 'Running Full Analysis...' : 'Run Full Analysis + 360° Summary'}</span>
           </button>
 
           {onToggleViewMode && (
@@ -336,25 +607,19 @@ export default function AICopilotDrawer({
         </div>
       </div>
 
-      {/* MODULAR AGENT SELECTOR BAR: Separate button for each type of analysis */}
+      {/* 3 CORE PILLARS SELECTOR BAR */}
       <div className="px-4 sm:px-6 py-3.5 bg-[#060b17] border-b border-[#192848] space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
             <Layers className="w-4 h-4 text-amber-400" />
-            <span>Select Specialized AI Analysis Module (Independent & Conflict-Free):</span>
+            <span>3 Specialized AI Verification Pillars + Complete 360° Client Summary:</span>
           </div>
           <span className="text-[11px] text-slate-400">
-            Case Type: <strong className="text-amber-300">{caseData?.case_type || caseData?.title}</strong>
+            Dossier Type: <strong className="text-amber-300">{caseData?.case_type || caseData?.title}</strong>
           </span>
         </div>
 
-        <div
-          className={`grid gap-3 ${
-            viewMode === 'expanded'
-              ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
-              : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
-          }`}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {agentCatalog.map((agent) => {
             const modResult = modularResults[agent.agentId];
             const isRunningThis = runningAgentId === agent.agentId;
@@ -368,7 +633,7 @@ export default function AICopilotDrawer({
             return (
               <div
                 key={agent.agentId}
-                className={`rounded-xl border p-3 flex flex-col justify-between transition-all min-w-0 overflow-hidden ${
+                className={`rounded-xl border p-3.5 flex flex-col justify-between transition-all min-w-0 overflow-hidden ${
                   isRunningThis
                     ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40 animate-pulse'
                     : modResult
@@ -380,15 +645,9 @@ export default function AICopilotDrawer({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                    {agent.isRecommended ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30 shrink-0">
-                        ★ Recommended
-                      </span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 shrink-0">
-                        Optional Module
-                      </span>
-                    )}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30 shrink-0">
+                      ★ Core Pillar
+                    </span>
 
                     {modResult && (
                       <span
@@ -446,7 +705,7 @@ export default function AICopilotDrawer({
                     ) : (
                       <>
                         <Play className="w-3 h-3 fill-current shrink-0" />
-                        <span className="truncate">Run Agent</span>
+                        <span className="truncate">Run Pillar</span>
                       </>
                     )}
                   </button>
@@ -455,7 +714,7 @@ export default function AICopilotDrawer({
                     <button
                       onClick={() => handleRunSingleAgent(agent.agentId)}
                       disabled={isRunningThis || runningAll}
-                      title="Re-run this specific AI agent"
+                      title="Re-run this specific AI pillar"
                       className="p-1.5 rounded-lg bg-[#070c18] hover:bg-[#132242] border border-[#1f325a] hover:border-amber-400 text-slate-300 hover:text-amber-300 cursor-pointer shrink-0 transition-colors"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isRunningThis ? 'animate-spin' : ''}`} />
@@ -500,15 +759,14 @@ export default function AICopilotDrawer({
               const isTarget = lNum === inlinePreviewDoc.lineNumber;
               return (
                 <div
-                  key={lNum}
-                  className={`px-2.5 py-1 rounded flex items-start gap-2.5 ${
+                  key={i}
+                  className={`px-2.5 py-1 rounded ${
                     isTarget
-                      ? 'bg-amber-400/25 border border-amber-400 text-amber-100 font-bold'
+                      ? 'bg-amber-400/25 border-l-4 border-amber-400 text-white font-bold'
                       : 'text-slate-400'
                   }`}
                 >
-                  <span className="w-5 text-right text-slate-500 select-none shrink-0">{lNum}</span>
-                  <span className="flex-1 break-words">{line}</span>
+                  {line}
                 </div>
               );
             })}
@@ -516,36 +774,25 @@ export default function AICopilotDrawer({
         </div>
       )}
 
+      {/* Main Content Area */}
       {!analysis && !runningAll && !runningAgentId ? (
-        <div className="p-8 sm:p-10 flex flex-col items-center justify-center text-center space-y-4 min-h-[300px]">
-          <div className="w-14 h-14 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
+        <div className="p-8 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center mx-auto text-amber-300">
             <Sparkles className="w-7 h-7" />
           </div>
-          <div className="max-w-lg space-y-1.5">
-            <h3 className="text-base sm:text-lg font-bold text-white">
-              Modular AI Copilot Ready for Case #{caseData?.case_number}
+          <div className="space-y-1.5 max-w-lg mx-auto">
+            <h3 className="text-lg font-bold text-white">
+              3-Pillar AI Analysis & 360° Client Summary Ready
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Click any <strong>Specialized AI Analysis Button</strong> above to run only the module you need (e.g. <em>KYC Audit</em>, <em>Income Cross-Check</em>, <em>DTI Stress-Test</em>, <em>AML Screening</em>, or <em>Smart Remediation</em>), or run the full suite at once.
-            </p>
-          </div>
-        </div>
-      ) : runningAll ? (
-        <div className="p-12 flex flex-col items-center justify-center text-center space-y-4 min-h-[300px]">
-          <div className="w-12 h-12 rounded-full border-3 border-amber-400 border-t-transparent animate-spin" />
-          <div className="space-y-1">
-            <p className="text-base font-bold text-white">
-              Executing Modular AI Agents on AWS Bedrock...
-            </p>
-            <p className="text-xs sm:text-sm text-slate-400">
-              PII Anonymization Shield → OCR Line Extraction → Policy & Deterministic Math → Bedrock Nova Pro Synthesis
+              Select any of the <strong>3 Core AI Pillars</strong> above (1. DTI & Repayment Capacity, 2. Unusual Transactions, 3. Document Reconciliation) or click <strong>Run Full Analysis + 360° Summary</strong> to generate the complete client underwriting report.
             </p>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col">
-          {/* Navigation Bar between Modular Hub and Deep-Dive Views */}
-          <div className="px-4 sm:px-6 pt-3 bg-[#070d1b] border-b border-[#16233d] flex items-center gap-1.5 overflow-x-auto">
+        <>
+          {/* Navigation Tabs */}
+          <div className="px-4 sm:px-6 pt-3 bg-[#091224] border-b border-[#1b2c4d] flex items-center gap-1.5 overflow-x-auto">
             <button
               onClick={() => setActiveTab('modular_hub')}
               className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
@@ -555,7 +802,19 @@ export default function AICopilotDrawer({
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Modular Reports ({executedModulesCount})</span>
+              <span>3 Pillars & 360° Report ({executedModulesCount}/3)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('summary_360')}
+              className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'summary_360'
+                  ? 'border-amber-400 text-amber-300 bg-[#0e182e]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>360° Client Summary</span>
             </button>
 
             <button
@@ -624,241 +883,408 @@ export default function AICopilotDrawer({
             </button>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-4">
-            {/* TAB 0: EXPANDABLE MODULAR REPORTS HUB (NO CONFLICTS BETWEEN MODULES) */}
+          <div className="p-4 sm:p-6 space-y-5">
+            {/* TAB: DEDICATED 360° CLIENT SUMMARY */}
+            {activeTab === 'summary_360' && renderClientExecutiveSummary360(clientSummary360)}
+
+            {/* TAB 0: 3 CORE PILLARS + COMPLETE 360° CLIENT SUMMARY AT THE BOTTOM */}
             {activeTab === 'modular_hub' && (
-              <div className="space-y-4">
-                {executedModulesCount === 0 ? (
+              <div className="space-y-5">
+                {executedModulesCount === 0 && !clientSummary360 ? (
                   <div className="p-6 rounded-2xl bg-[#0a1326] border border-[#1b2d50] text-center space-y-3">
                     <p className="text-sm text-slate-300">
-                      Click any of the 5 modular agent buttons above to execute and expand its dedicated report.
+                      Click any of the 3 Core Pillar buttons above or <strong>Run Full Analysis + 360° Summary</strong> to generate the modular verification reports.
                     </p>
                   </div>
                 ) : (
-                  agentCatalog.map((agent) => {
-                    const mod = modularResults[agent.agentId];
-                    if (!mod) return null;
-                    const isExpanded = Boolean(expandedModules[agent.agentId]);
-                    const isAlert = mod.status === 'action_required' || mod.status === 'needs_review' || mod.status === 'critical';
+                  <>
+                    {agentCatalog.map((agent) => {
+                      const mod = modularResults[agent.agentId];
+                      if (!mod) return null;
+                      const isExpanded = Boolean(expandedModules[agent.agentId]);
+                      const isAlert =
+                        mod.status === 'action_required' ||
+                        mod.status === 'needs_review' ||
+                        mod.status === 'critical';
 
-                    return (
-                      <div
-                        key={agent.agentId}
-                        className={`rounded-2xl border transition-all overflow-hidden ${
-                          isAlert
-                            ? 'bg-[#140d18]/90 border-amber-500/45'
-                            : 'bg-[#0a1428] border-emerald-500/35'
-                        }`}
-                      >
-                        {/* Expandable Module Header */}
+                      return (
                         <div
-                          onClick={() =>
-                            setExpandedModules((prev) => ({
-                              ...prev,
-                              [agent.agentId]: !prev[agent.agentId],
-                            }))
-                          }
-                          className="px-4 sm:px-5 py-3.5 bg-[#0d1830] border-b border-white/5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-[#122142] transition-colors"
+                          key={agent.agentId}
+                          className={`rounded-2xl border transition-all overflow-hidden ${
+                            isAlert
+                              ? 'bg-[#140d18]/90 border-amber-500/45'
+                              : 'bg-[#0a1428] border-emerald-500/35'
+                          }`}
                         >
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                isAlert
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                              }`}
-                            >
-                              {mod.badgeText}
-                            </span>
-                            <h4 className="text-sm sm:text-base font-bold text-white">
-                              {mod.name}
-                            </h4>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className="text-[11px] font-mono text-blue-300 hidden sm:inline">
-                              {mod.engineUsed}
-                            </span>
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4 text-slate-300" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-slate-300" />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Expandable Module Body */}
-                        {isExpanded && (
-                          <div className="p-4 sm:p-5 space-y-4">
-                            {/* AWS Bedrock Executive Synthesis */}
-                            <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#1b2d52] space-y-1">
-                              <div className="flex items-center justify-between text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
-                                <span>AWS Bedrock Agent Assessment</span>
-                                <span className="font-mono text-slate-400">{mod.executedAt}</span>
-                              </div>
-                              <p className="text-xs sm:text-sm text-slate-100 leading-relaxed">
-                                {mod.aiNarrative}
-                              </p>
-                            </div>
-
-                            {/* Key Highlights Grid */}
-                            {mod.highlights && mod.highlights.length > 0 && (
-                              <div
-                                className={`grid gap-2.5 ${
-                                  viewMode === 'expanded'
-                                    ? 'grid-cols-2 sm:grid-cols-4'
-                                    : 'grid-cols-1 sm:grid-cols-2'
+                          {/* Expandable Module Header */}
+                          <div
+                            onClick={() =>
+                              setExpandedModules((prev) => ({
+                                ...prev,
+                                [agent.agentId]: !prev[agent.agentId],
+                              }))
+                            }
+                            className="px-4 sm:px-5 py-3.5 bg-[#0d1830] border-b border-white/5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-[#122142] transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                  isAlert
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                                 }`}
                               >
-                                {mod.highlights.map((h, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="p-3 rounded-xl bg-[#070d1b] border border-[#162442] text-xs min-w-0 overflow-hidden"
-                                  >
-                                    <span
-                                      className="text-slate-400 block text-[11px] font-medium truncate"
-                                      title={h.label}
-                                    >
-                                      {h.label}
-                                    </span>
-                                    <span
-                                      title={String(h.value)}
-                                      className={`font-bold text-xs sm:text-sm block mt-1 truncate ${
-                                        h.status === 'critical'
-                                          ? 'text-red-400'
-                                          : h.status === 'warning'
-                                          ? 'text-amber-300'
-                                          : 'text-emerald-300'
-                                      }`}
-                                    >
-                                      {h.value}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                {mod.badgeText}
+                              </span>
+                              <h4 className="text-sm sm:text-base font-bold text-white">
+                                {mod.name}
+                              </h4>
+                            </div>
 
-                            {/* Module-Specific Findings & Interactive Citations */}
-                            {mod.findings && mod.findings.length > 0 && (
-                              <div className="space-y-2.5">
-                                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-                                  Document Citations & Interactive Resolution:
-                                </span>
-                                {mod.findings.map((f) => {
-                                  const isRed = f.flagType === 'red_flag';
-                                  const isResolved =
-                                    f.status === 'resolved_by_officer' || f.status === 'confirmed_by_officer';
-                                  return (
+                            <div className="flex items-center gap-3">
+                              <span className="text-[11px] font-mono text-blue-300 hidden sm:inline">
+                                {mod.engineUsed}
+                              </span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-slate-300" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-slate-300" />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Expandable Module Body */}
+                          {isExpanded && (
+                            <div className="p-4 sm:p-5 space-y-4">
+                              {/* AWS Bedrock Executive Synthesis */}
+                              <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#1b2d52] space-y-1">
+                                <div className="flex items-center justify-between text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
+                                  <span>AWS Bedrock Agent Assessment</span>
+                                  <span className="font-mono text-slate-400">{mod.executedAt}</span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-slate-100 leading-relaxed">
+                                  {mod.aiNarrative}
+                                </p>
+                              </div>
+
+                              {/* Key Highlights Grid */}
+                              {mod.highlights && mod.highlights.length > 0 && (
+                                <div
+                                  className={`grid gap-2.5 ${
+                                    viewMode === 'expanded'
+                                      ? 'grid-cols-2 sm:grid-cols-4'
+                                      : 'grid-cols-1 sm:grid-cols-2'
+                                  }`}
+                                >
+                                  {mod.highlights.map((h, idx) => (
                                     <div
-                                      key={f.id}
-                                      className={`p-3.5 rounded-xl border space-y-2.5 ${
-                                        isResolved
-                                          ? 'bg-[#0a1628] border-blue-500/40'
-                                          : isRed
-                                          ? 'bg-red-950/25 border-red-500/40'
-                                          : 'bg-emerald-950/20 border-emerald-500/30'
-                                      }`}
+                                      key={idx}
+                                      className="p-3 rounded-xl bg-[#070d1b] border border-[#162442] text-xs min-w-0 overflow-hidden"
                                     >
+                                      <span
+                                        className="text-slate-400 block text-[11px] font-medium truncate"
+                                        title={h.label}
+                                      >
+                                        {h.label}
+                                      </span>
+                                      <span
+                                        title={String(h.value)}
+                                        className={`font-bold text-xs sm:text-sm block mt-1 truncate ${
+                                          h.status === 'critical'
+                                            ? 'text-red-400'
+                                            : h.status === 'warning'
+                                            ? 'text-amber-300'
+                                            : 'text-emerald-300'
+                                        }`}
+                                      >
+                                        {h.value}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* PILLAR 1 SPECIFIC: Missing / Contradictory Financial Data & Active Credits */}
+                              {mod.structuredData && (
+                                <div className="space-y-3">
+                                  {mod.structuredData.contradictionsAndMissing?.length > 0 && (
+                                    <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 space-y-2">
+                                      <span className="text-xs font-bold uppercase tracking-wider text-amber-300 block">
+                                        Contradictory or Missing Financial Data Flagged:
+                                      </span>
+                                      {mod.structuredData.contradictionsAndMissing.map((c, idx) => (
+                                        <div key={idx} className="text-xs text-slate-200 flex items-start gap-2">
+                                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                                          <div>
+                                            <strong className="text-white">{c.field}:</strong> {c.issue}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {mod.structuredData.obligations?.activeCreditsList?.length > 0 && (
+                                    <div className="p-3.5 rounded-xl bg-[#070d1b] border border-[#162442] space-y-2">
+                                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                                        Active & Overdue Credit Obligations (Financial Profile):
+                                      </span>
+                                      <div className="grid grid-cols-1 gap-2">
+                                        {mod.structuredData.obligations.activeCreditsList.map((cr, i) => (
+                                          <div
+                                            key={i}
+                                            className="p-2.5 rounded-lg bg-[#050914] border border-[#15223c] flex flex-wrap items-center justify-between gap-2 text-xs"
+                                          >
+                                            <div>
+                                              <span className="font-bold text-white">{cr.lender}</span>{' '}
+                                              <span className="text-slate-400">({cr.creditType})</span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <span className="text-slate-300">
+                                                Balance: <strong>€{cr.remainingBalance.toLocaleString('en-US')}</strong>
+                                              </span>
+                                              <span className="text-amber-300 font-bold">
+                                                €{cr.monthlyPayment.toLocaleString('en-US')} / mo
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* PILLAR 2 SPECIFIC: Unusual Transactions & Isolated Suspected Expenses */}
+                              {mod.transactionBreakdown && (
+                                <div className="space-y-3">
+                                  {mod.transactionBreakdown.suspectedSignals?.length > 0 ? (
+                                    <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/45 space-y-2.5">
                                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                                        <span className="text-xs sm:text-sm font-bold text-white">
-                                          {f.title}
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                                          Isolated Unverified ("Suspected") Signals — For Officer Verification:
                                         </span>
-                                        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300">
-                                          {f.ruleRef}
+                                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-semibold">
+                                          Excluded from baseline living total
                                         </span>
                                       </div>
-                                      <p className="text-xs text-slate-300">{f.description}</p>
-
-                                      {f.values && f.values.length > 0 && (
-                                        <div className="grid grid-cols-1 gap-1.5">
-                                          {f.values.map((v, i) => (
-                                            <button
-                                              key={i}
-                                              onClick={() =>
-                                                handleCitationClick(v.documentId, v.lineNumber, v.quote)
-                                              }
-                                              className="w-full text-left p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#1a2b4c] hover:border-amber-400 flex items-center justify-between gap-2 text-xs cursor-pointer"
-                                            >
-                                              <div className="truncate">
-                                                <span className="font-semibold text-blue-300">
-                                                  {v.documentName} (Line {v.lineNumber}):
-                                                </span>{' '}
-                                                <span className="font-mono text-slate-300">"{v.quote}"</span>
-                                              </div>
-                                              <span className="text-amber-400 shrink-0 font-semibold flex items-center gap-1">
-                                                {v.formattedValue || v.value}{' '}
-                                                <ExternalLink className="w-3 h-3" />
-                                              </span>
-                                            </button>
-                                          ))}
+                                      {mod.transactionBreakdown.suspectedSignals.map((sig, i) => (
+                                        <div
+                                          key={i}
+                                          className="p-3 rounded-lg bg-[#060b16] border border-amber-500/30 space-y-1 text-xs"
+                                        >
+                                          <div className="flex items-center justify-between font-bold">
+                                            <span className="text-white">{sig.category}</span>
+                                            <span className="text-amber-300">
+                                              €{Number(sig.monthlyAmount).toLocaleString('en-US')} / month ({sig.verificationStatus})
+                                            </span>
+                                          </div>
+                                          <p className="text-slate-300 text-[11px]">
+                                            <strong>Evidence Note:</strong> {sig.evidenceNote}
+                                          </p>
+                                          <p className="text-amber-200/90 text-[11px] italic">
+                                            {sig.actionRequired}
+                                          </p>
                                         </div>
-                                      )}
-
-                                      {isRed && f.selectableValues && f.selectableValues.length > 0 && (
-                                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                                          {f.selectableValues.map((val, idx) => (
-                                            <button
-                                              key={idx}
-                                              disabled={actionLoading}
-                                              onClick={() =>
-                                                handleResolveFinding(f.id, 'override_value', val)
-                                              }
-                                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 cursor-pointer"
-                                            >
-                                              <Check className="w-3.5 h-3.5" />
-                                              <span>
-                                                Validate & Apply:{' '}
-                                                {typeof val === 'number'
-                                                  ? `€${val.toLocaleString('en-US')}`
-                                                  : val}
-                                              </span>
-                                            </button>
-                                          ))}
-                                        </div>
-                                      )}
+                                      ))}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                  ) : (
+                                    <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-200 flex items-center gap-2">
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                      <span>
+                                        No unverified ("suspected") merchant signals or unusual monthly spending spikes detected across account statements and expense records.
+                                      </span>
+                                    </div>
+                                  )}
 
-                            {/* Quick Action for Smart Remediation Module */}
-                            {agent.agentId === 'smart_remediation' && mod.remediation?.required && (
-                              <div className="p-3.5 rounded-xl bg-[#070d1b] border border-[#1b2e54] space-y-2.5">
-                                <div className="text-xs font-semibold text-amber-300">
-                                  Generated Email Preview ({mod.remediation.recipientEmail}):
+                                  {mod.transactionBreakdown.salaryInflows?.length > 0 && (
+                                    <div className="p-3.5 rounded-xl bg-[#070d1b] border border-[#162442] space-y-2">
+                                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                                        Observed 3-Month Bank Statement Salary Inflows ({mod.transactionBreakdown.bankStatementDocument}):
+                                      </span>
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        {mod.transactionBreakdown.salaryInflows.map((inf, idx) => (
+                                          <button
+                                            key={idx}
+                                            onClick={() =>
+                                              handleCitationClick(inf.documentId, inf.lineNumber, inf.quote)
+                                            }
+                                            className="p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#182744] hover:border-amber-400 text-left text-xs cursor-pointer transition-colors"
+                                          >
+                                            <span className="text-slate-400 block text-[11px]">{inf.month}</span>
+                                            <span className="font-bold text-emerald-300 block mt-0.5">
+                                              +€{Number(inf.amount).toLocaleString('en-US')}
+                                            </span>
+                                            <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1">
+                                              Line {inf.lineNumber} <ExternalLink className="w-2.5 h-2.5" />
+                                            </span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                                <pre className="p-3 rounded-lg bg-[#050811] border border-[#15223c] text-xs text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
-                                  {mod.remediation.emailBody}
-                                </pre>
-                                <button
-                                  onClick={handleSendRemediation}
-                                  disabled={actionLoading}
-                                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Send className="w-3.5 h-3.5" />
-                                  <span>Dispatch SMS & Email with Secure Upload Link</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+                              )}
+
+                              {/* PILLAR 3 SPECIFIC: 3-Way Data Reconciliation Matrix */}
+                              {mod.reconciliationMatrix && mod.reconciliationMatrix.length > 0 && (
+                                <div className="p-3.5 rounded-xl bg-[#070d1b] border border-[#162442] space-y-2.5 overflow-x-auto">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                                    3-Way Data Reconciliation Matrix (Documents vs. System/ANAF vs. Financial Profile):
+                                  </span>
+                                  <table className="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                      <tr className="border-b border-[#1b2c4e] text-slate-400 text-[11px]">
+                                        <th className="py-2 pr-2">Dimension</th>
+                                        <th className="py-2 px-2">Extracted from Docs</th>
+                                        <th className="py-2 px-2">System / ANAF</th>
+                                        <th className="py-2 px-2">Financial Profile</th>
+                                        <th className="py-2 pl-2 text-right">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#13203a]">
+                                      {mod.reconciliationMatrix.map((row, rIdx) => {
+                                        const isMismatch = row.status === 'mismatch';
+                                        return (
+                                          <tr key={rIdx} className={isMismatch ? 'bg-red-950/20' : ''}>
+                                            <td className="py-2 pr-2 font-semibold text-white">
+                                              {row.dimension}
+                                              <span className="block text-[10px] font-mono text-slate-400">
+                                                {row.ruleRef}
+                                              </span>
+                                            </td>
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
+                                              {row.documentsValue}
+                                            </td>
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
+                                              {row.systemRecordValue}
+                                            </td>
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
+                                              {row.financialProfileValue}
+                                            </td>
+                                            <td className="py-2 pl-2 text-right">
+                                              <span
+                                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                  isMismatch
+                                                    ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                }`}
+                                              >
+                                                {isMismatch ? 'MISMATCH' : 'MATCHED'}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Module-Specific Findings & Interactive Citations */}
+                              {mod.findings && mod.findings.length > 0 && (
+                                <div className="space-y-2.5">
+                                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                                    Document Citations & Interactive Resolution:
+                                  </span>
+                                  {mod.findings.map((f) => {
+                                    const isRed = f.flagType === 'red_flag';
+                                    const isResolved =
+                                      f.status === 'resolved_by_officer' || f.status === 'confirmed_by_officer';
+                                    return (
+                                      <div
+                                        key={f.id}
+                                        className={`p-3.5 rounded-xl border space-y-2.5 ${
+                                          isResolved
+                                            ? 'bg-[#0a1628] border-blue-500/40'
+                                            : isRed
+                                            ? 'bg-red-950/25 border-red-500/40'
+                                            : 'bg-emerald-950/20 border-emerald-500/30'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                          <span className="text-xs sm:text-sm font-bold text-white">
+                                            {f.title}
+                                          </span>
+                                          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300">
+                                            {f.ruleRef}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-slate-300">{f.description}</p>
+
+                                        {f.values && f.values.length > 0 && (
+                                          <div className="grid grid-cols-1 gap-1.5">
+                                            {f.values.map((v, i) => (
+                                              <button
+                                                key={i}
+                                                onClick={() =>
+                                                  handleCitationClick(v.documentId, v.lineNumber, v.quote)
+                                                }
+                                                className="w-full text-left p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#1a2b4c] hover:border-amber-400 flex items-center justify-between gap-2 text-xs cursor-pointer"
+                                              >
+                                                <div className="truncate">
+                                                  <span className="font-semibold text-blue-300">
+                                                    {v.documentName} (Line {v.lineNumber}):
+                                                  </span>{' '}
+                                                  <span className="font-mono text-slate-300">"{v.quote}"</span>
+                                                </div>
+                                                <span className="text-amber-400 shrink-0 font-semibold flex items-center gap-1">
+                                                  {v.formattedValue || v.value}{' '}
+                                                  <ExternalLink className="w-3 h-3" />
+                                                </span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {isRed && f.selectableValues && f.selectableValues.length > 0 && (
+                                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                                            {f.selectableValues.map((val, idx) => (
+                                              <button
+                                                key={idx}
+                                                disabled={actionLoading}
+                                                onClick={() =>
+                                                  handleResolveFinding(f.id, 'override_value', val)
+                                                }
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 cursor-pointer"
+                                              >
+                                                <Check className="w-3.5 h-3.5" />
+                                                <span>
+                                                  Validate & Apply:{' '}
+                                                  {typeof val === 'number'
+                                                    ? `€${val.toLocaleString('en-US')}`
+                                                    : val}
+                                                </span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* COMPLETE 360° CLIENT EXECUTIVE SUMMARY AT THE END OF THE ANALYSIS */}
+                    {clientSummary360 && renderClientExecutiveSummary360(clientSummary360)}
+                  </>
                 )}
               </div>
             )}
 
-            {/* TAB 1: AUDIT & FINDINGS */}
+            {/* TAB 1: ALL CITATIONS & FLAGS */}
             {activeTab === 'findings' && (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-slate-400">
-                  <span>
-                    Click any <strong>source citation</strong> to automatically highlight the corresponding line in the document.
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                  <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300">
+                    All Cross-Document Verification Findings:
                   </span>
-                  <span className="font-mono text-xs text-slate-300 font-semibold">
-                    {redFlags.length} Red Flags (Alerts) • {greenFlags.length} Green Flags (Validated)
+                  <span className="text-xs text-slate-400">
+                    Click any citation to preview the exact line in the source document
                   </span>
                 </div>
 
@@ -950,8 +1376,8 @@ export default function AICopilotDrawer({
                                   onClick={() => handleResolveFinding(f.id, 'override_value', val)}
                                   className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                                     String(f.resolvedValue) === String(val)
-                                      ? 'bg-emerald-600 text-white shadow-md'
-                                      : 'bg-blue-600/25 hover:bg-blue-600 text-blue-200 hover:text-white border border-blue-500/40'
+                                      ? 'bg-emerald-500 text-slate-950 font-bold'
+                                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow'
                                   }`}
                                 >
                                   <Check className="w-4 h-4" />
@@ -961,15 +1387,15 @@ export default function AICopilotDrawer({
                                   </span>
                                 </button>
                               ))
-                            ) : null}
-
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => handleResolveFinding(f.id, 'confirm')}
-                              className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
-                            >
-                              Confirm Finding
-                            </button>
+                            ) : (
+                              <button
+                                disabled={actionLoading}
+                                onClick={() => handleResolveFinding(f.id, 'confirm')}
+                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer"
+                              >
+                                Mark as Verified by Officer
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -979,53 +1405,46 @@ export default function AICopilotDrawer({
               </div>
             )}
 
-            {/* TAB 2: PYTHON FINANCIAL MATH */}
+            {/* TAB 2: DETERMINISTIC PYTHON MATH */}
             {activeTab === 'math' && analysis?.feasibilityMath && (
-              <div className="space-y-4">
-                <div className="p-5 rounded-2xl bg-[#0c162c] border border-blue-500/30 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
-                      <Calculator className="w-4 h-4" />
-                      Deterministic Python Financial Engine (Zero LLM Hallucination Risk)
-                    </span>
-                    <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
-                      REG-DTI-04
-                    </span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                    AI agents only extract figures from documents; <strong>all loan installment and debt-to-income calculations are executed strictly in deterministic Python code</strong> for 100% regulatory compliance.
-                  </p>
-                  <div className="p-3 rounded-xl bg-[#060b16] border border-[#192947] font-mono text-xs text-amber-300 break-words">
-                    {analysis.feasibilityMath.formula_used}
+              <div className="space-y-5">
+                <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 flex items-start gap-3">
+                  <Calculator className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-xs sm:text-sm text-emerald-100 leading-relaxed">
+                    <strong>Zero-Hallucination Guarantee:</strong> Financial indicators, monthly annuity installments, and Debt-to-Income (DTI) ratios are computed strictly in deterministic Python code, never estimated by an LLM.
                   </div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-[#0a1224] border border-[#192846] space-y-4">
-                  <div className="flex items-center justify-between">
+                <div className="p-5 rounded-2xl bg-[#0b1325] border border-[#1c2e54] space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <span className="text-xs sm:text-sm text-slate-400 block">
-                        Calculated Debt-to-Income (DTI)
+                      <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                        Debt-to-Income Ratio (DTI)
                       </span>
-                      <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400">
+                      <div className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">
                         {analysis.feasibilityMath.dti_percentage}%
-                      </span>
+                        <span className="text-sm font-normal text-slate-400 ml-2">
+                          (Max Ceiling: {analysis.feasibilityMath.max_allowed_dti_percentage}%)
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs sm:text-sm text-slate-400 block">Regulatory DTI Ceiling</span>
-                      <span className="text-2xl font-bold text-slate-200">
-                        {analysis.feasibilityMath.max_dti_limit_percent}%
-                      </span>
-                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs sm:text-sm font-bold ${
+                        analysis.feasibilityMath.is_feasible
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-red-500/20 text-red-300 border border-red-500/40'
+                      }`}
+                    >
+                      {analysis.feasibilityMath.status_label}
+                    </span>
                   </div>
 
-                  <div className="w-full h-3.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden relative">
+                  <div className="w-full h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-700 relative">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        analysis.feasibilityMath.is_feasible ? 'bg-emerald-500' : 'bg-red-500'
+                      className={`h-full transition-all duration-500 ${
+                        analysis.feasibilityMath.dti_percentage <= 40 ? 'bg-emerald-500' : 'bg-red-500'
                       }`}
-                      style={{
-                        width: `${Math.min(analysis.feasibilityMath.dti_percentage, 100)}%`,
-                      }}
+                      style={{ width: `${Math.min(100, analysis.feasibilityMath.dti_percentage)}%` }}
                     />
                     <div
                       className="absolute top-0 bottom-0 w-0.5 bg-amber-400"
@@ -1064,105 +1483,107 @@ export default function AICopilotDrawer({
                         €{analysis.feasibilityMath.monthly_income_used?.toLocaleString('en-US')}
                       </span>
                       <span className="text-xs text-slate-500 block mt-0.5">
-                        Max allowable installment: €{analysis.feasibilityMath.max_allowed_installment}
+                        Total Debt Service: €{analysis.feasibilityMath.total_monthly_debt_service}/mo
                       </span>
                     </div>
                   </div>
+
+                  <div className="p-3 rounded-xl bg-[#050811] border border-slate-800 font-mono text-xs text-slate-300">
+                    Formula: {analysis.feasibilityMath.formula_used}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 3: REMEDIATION AGENT */}
+            {/* TAB 3: REMEDIATION & CUSTOMER OUTREACH */}
             {activeTab === 'remediation' && analysis?.remediation && (
               <div className="space-y-4">
-                <div className="p-5 rounded-2xl bg-[#0c162c] border border-[#1d3158] space-y-3">
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#0b1326] border border-[#1e3158] space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <Send className="w-4 h-4" />
-                      Remediation Agent (Customer Communication Automation)
-                    </span>
+                    <div>
+                      <span className="text-xs uppercase font-bold tracking-wider text-amber-400">
+                        Automated Customer Remediation Bridge
+                      </span>
+                      <h4 className="text-base font-bold text-white mt-0.5">
+                        {analysis.remediation.required
+                          ? `Trigger: ${analysis.remediation.triggerReason}`
+                          : 'No Remediation Needed — All Documents Valid'}
+                      </h4>
+                    </div>
                     <span
-                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                        analysis.remediation.status === 'sent_automatically' ||
+                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
                         analysis.remediation.status === 'sent_by_officer'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : analysis.remediation.required
-                          ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                           : 'bg-slate-800 text-slate-400'
                       }`}
                     >
-                      {analysis.remediation.status === 'sent_automatically'
-                        ? '✓ Auto-Dispatched at Triage'
-                        : analysis.remediation.status === 'sent_by_officer'
-                        ? '✓ Dispatched to Customer'
-                        : analysis.remediation.required
-                        ? 'Ready for Dispatch'
-                        : 'Not Required'}
+                      {analysis.remediation.status === 'sent_by_officer'
+                        ? `Dispatched (${analysis.remediation.sentAt})`
+                        : analysis.remediation.status}
                     </span>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-slate-200">
-                    <strong>Trigger Condition:</strong> {analysis.remediation.triggerReason}
-                  </p>
-                </div>
-
-                {analysis.remediation.required && (
-                  <>
-                    <div className="p-4 sm:p-5 rounded-2xl bg-[#0a1224] border border-[#192846] space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-                        <span className="font-semibold text-blue-300 flex items-center gap-2">
+                  {analysis.remediation.required && (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-blue-300">
                           <MessageSquare className="w-4 h-4" />
-                          SMS Notification to {analysis.remediation.recipientPhone}
-                        </span>
-                        <span className="text-xs text-slate-400">Raiffeisen SMS Gateway</span>
+                          <span>SMS Preview ({analysis.remediation.recipientPhone}):</span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#182744] text-xs sm:text-sm text-slate-200 font-mono">
+                          {analysis.remediation.smsPreview}
+                        </div>
                       </div>
-                      <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#15223c] text-xs sm:text-sm text-slate-200 font-mono break-words">
-                        {analysis.remediation.smsPreview}
-                      </div>
-                    </div>
 
-                    <div className="p-4 sm:p-5 rounded-2xl bg-[#0a1224] border border-[#192846] space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-                        <span className="font-semibold text-amber-300 flex items-center gap-2">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-amber-300">
                           <Mail className="w-4 h-4" />
-                          Official Email to {analysis.remediation.recipientEmail}
-                        </span>
+                          <span>Email Preview ({analysis.remediation.recipientEmail}):</span>
+                        </div>
+                        <div className="p-4 rounded-xl bg-[#060b16] border border-[#182744] space-y-2 text-xs sm:text-sm">
+                          <div className="font-bold text-white border-b border-slate-800 pb-2">
+                            Subject: {analysis.remediation.emailSubject}
+                          </div>
+                          <pre className="text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
+                            {analysis.remediation.emailBody}
+                          </pre>
+                        </div>
                       </div>
-                      <div className="text-xs sm:text-sm font-semibold text-white">
-                        Subject: {analysis.remediation.emailSubject}
-                      </div>
-                      <pre className="p-4 rounded-xl bg-[#060b16] border border-[#15223c] text-xs sm:text-sm text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
-                        {analysis.remediation.emailBody}
-                      </pre>
-                    </div>
 
-                    <button
-                      onClick={handleSendRemediation}
-                      disabled={actionLoading}
-                      className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>Dispatch SMS & Email with Secure Upload Link Now</span>
-                    </button>
-                  </>
-                )}
+                      <button
+                        disabled={actionLoading || analysis.remediation.status === 'sent_by_officer'}
+                        onClick={handleSendRemediation}
+                        className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>
+                          {analysis.remediation.status === 'sent_by_officer'
+                            ? 'Clarification Request Already Sent to Customer'
+                            : 'Approve & Dispatch SMS + Email with Secure Re-Upload Link'}
+                        </span>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* TAB 4: EXTRACTED DATA & GDPR */}
+            {/* TAB 4: GDPR PII SHIELD & EXTRACTED OCR */}
             {activeTab === 'pii_data' && (
-              <div className="space-y-4">
-                <div className="p-5 rounded-2xl bg-[#0c162c] border border-emerald-500/30 space-y-3">
+              <div className="space-y-5">
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm sm:text-base">
                       <Lock className="w-4 h-4" />
-                      PII Anonymization Shield (GDPR & Banking Secrecy)
-                    </span>
+                      <span>Local PII Anonymization Shield (GDPR Art. 4 & 32)</span>
+                    </div>
                     <button
                       onClick={() => setShowMaskedPii(!showMaskedPii)}
-                      className="px-3 py-1.5 rounded-lg bg-[#060b16] border border-emerald-500/40 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/50 cursor-pointer"
+                      className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 border border-slate-700 cursor-pointer"
                     >
-                      {showMaskedPii ? 'Show Original Values' : 'Show Masked Tokens'}
+                      {showMaskedPii ? 'Show Re-Hydrated Officer View' : 'Show Masked LLM Tokens'}
                     </button>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
@@ -1183,7 +1604,7 @@ export default function AICopilotDrawer({
               </div>
             )}
 
-            {/* TAB 5: EXECUTION TRACE & POLICY RULES */}
+            {/* TAB 5: EXECUTION TRACE */}
             {activeTab === 'trace' && (
               <div className="space-y-5">
                 <div className="space-y-2.5">
@@ -1214,6 +1635,7 @@ export default function AICopilotDrawer({
             )}
           </div>
 
+          {/* Final Human-in-the-Loop Decision Bar */}
           <div className="p-4 sm:p-5 bg-[#0a1326] border-t border-[#1e3158] space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
@@ -1221,7 +1643,7 @@ export default function AICopilotDrawer({
                 Final Credit Officer Decision (Human-in-the-Loop):
               </span>
               <span className="text-xs text-slate-400">
-                AI prepares audit trail • Human takes lending decision
+                AI prepares 3-pillar audit & 360° summary • Human takes lending decision
               </span>
             </div>
 
@@ -1255,14 +1677,14 @@ export default function AICopilotDrawer({
               <button
                 disabled={actionLoading}
                 onClick={() => handleFinalDecision('reject')}
-                className="py-2.5 px-4 rounded-xl bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
                 <span>Reject Case</span>
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -12,6 +12,11 @@ Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă �
 - Carduri cu venit lunar, ieșiri lunare, soldul creditelor și cheltuieli suspectate afișate separat.
 - Seed determinist pentru clienții demo, fără suprascrierea profilurilor existente.
 - Compatibilitate cu vechiul câmp `clients.cnp`, redenumit `national_id` la inițializare.
+- **Raiffeisen AI Copilot (3-Pillar Architecture + 360° Client Executive Summary)**:
+  1. `dti_repayment_capacity` — Verificarea gradului de îndatorare (DTI plafon 40%), stress-test dobândă (+2%), cashflow net disponibil după cheltuielile lunare (`declared` + `confirmed`) și ratele creditelor (`active` + `overdue`), plus semnalarea datelor lipsă/contradictorii.
+  2. `unusual_transactions` — Analiza extrasului de cont pe 3 luni și a structurii cheltuielilor, cu izolarea cheltuielilor `suspected` (ex. `sports_betting`) și a notelor de evidență (`evidence_note`) pentru verificarea umană.
+  3. `doc_reconciliation` — Matrice de reconciliere în 3 direcții (Documente extrase cu citări pe linie vs. Sistem/ANAF vs. Profil Financiar).
+  4. `clientSummary360` — Rezumat Executiv 360° complet despre client la finalul analizei (AWS Bedrock Amazon Nova Pro + motor determinist).
 
 ## Date demo
 
@@ -20,15 +25,14 @@ La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit
 ## Verificări efectuate
 
 - Cele 4 teste din `backend/tests/test_financial_profiles.py` au trecut: persistență și înlocuire, validare, idempotenta seed-ului și consistența profilurilor generate.
-- `npm run build` a trecut după adăugarea UI-ului.
+- `npm run build` a trecut după adăugarea UI-ului și a noii arhitecturi în 3 piloni + Rezumat 360°.
+- Endpoint-urile `/api/cases/{id}/analysis` și `/api/cases/{id}/agents/{agent_id}/run` au fost verificate live cu AWS Bedrock (`Amazon Nova Pro`).
 - Toate profilurile locale au trecut validarea `FinancialProfileOut`; nu existau clienți fără profil.
 - `git diff --check` a trecut după implementare.
-- Testul HTTP local dintre funcțiile frontend și backend nu a putut fi finalizat: mediul a respins conexiunea la localhost cu `EPERM`.
-- Verificarea vizuală într-un browser și testarea PostgreSQL nu au fost efectuate în această sesiune.
 
 ## Limite cunoscute
 
-- Profilurile sunt snapshot-uri independente: câmpurile vechi de venit/datorii și analiza AI nu se actualizează automat.
+- Profilurile sunt snapshot-uri independente: salvarea în `PUT /api/clients/{id}/financial-profile` nu suprascrie automat câmpurile vechi din `clients`, dar copilotul citește acum ambele surse și evidențiază eventualele diferențe.
 - Schimbarea monedei în UI schimbă eticheta, fără conversia sumelor.
 - Salvarea unui profil demo setează `is_demo=false`, dar nu validează proveniența datelor.
 - Avertizarea pentru modificări nesalvate acoperă închiderea/reîncărcarea paginii și linkul **All clients**; alte navigări interne trebuie verificate.

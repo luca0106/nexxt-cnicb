@@ -18,13 +18,30 @@ from ..agents.orchestrator import execute_multi_agent_pipeline, calculate_feasib
 from ..agents.modular_agents import (
     get_case_agent_catalog,
     execute_single_modular_agent,
+    build_client_executive_summary_360,
     AGENT_CATALOG,
 )
 
 router = APIRouter(tags=["Raiffeisen AI Copilot (Multi-Agent Extension)"])
 
 
-def _serialize_analysis(analysis: AIAnalysis, case_number: str) -> AIAnalysisResponse:
+def _serialize_analysis(analysis: AIAnalysis, case_number: str, case_obj: Optional[Case] = None) -> AIAnalysisResponse:
+    findings = json.loads(analysis.findings_json or "[]")
+    feasibility_math = json.loads(analysis.feasibility_math_json or "{}")
+    remediation = json.loads(analysis.remediation_json or "{}")
+    metrics = json.loads(analysis.metrics_json or "{}")
+
+    # Ensure 360° Client Executive Summary is always present in metrics
+    if case_obj is not None and "clientSummary360" not in metrics:
+        modular_results = metrics.get("modularResults", {})
+        metrics["clientSummary360"] = build_client_executive_summary_360(
+            case_obj=case_obj,
+            modular_results=modular_results,
+            feasibility_math=feasibility_math,
+            findings=findings,
+            remediation=remediation,
+        )
+
     return AIAnalysisResponse(
         analysisId=analysis.analysis_uid,
         caseId=analysis.case_id,
@@ -37,12 +54,12 @@ def _serialize_analysis(analysis: AIAnalysis, case_number: str) -> AIAnalysisRes
         piiMasking=json.loads(analysis.pii_masking_json or "{}"),
         extractedFields=json.loads(analysis.extracted_fields_json or "[]"),
         policyRules=json.loads(analysis.policy_rules_json or "[]"),
-        findings=json.loads(analysis.findings_json or "[]"),
-        feasibilityMath=json.loads(analysis.feasibility_math_json or "{}"),
-        remediation=json.loads(analysis.remediation_json or "{}"),
+        findings=findings,
+        feasibilityMath=feasibility_math,
+        remediation=remediation,
         workflowChecklist=json.loads(analysis.workflow_checklist_json or "[]"),
         executionTrace=json.loads(analysis.execution_trace_json or "[]"),
-        metrics=json.loads(analysis.metrics_json or "{}"),
+        metrics=metrics,
         createdAt=analysis.created_at,
         completedAt=analysis.completed_at,
     )
@@ -60,8 +77,8 @@ def _find_case(db: Session, case_id: int) -> Case:
 @router.get("/cases/{case_id}/agents")
 def list_case_modular_agents(case_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
-    Returns the modular AI agent catalog tailored for this case type,
-    along with any modular results already executed on this case.
+    Returns the 3-pillar modular AI agent catalog for this case,
+    along with any modular results already executed.
     """
     case_obj = _find_case(db, case_id)
     catalog = get_case_agent_catalog(case_obj)
@@ -96,18 +113,19 @@ def run_modular_agent_on_case(
     """
     Executes a single specialized AI agent module (`agent_id`) independently using the
     configured AWS Bedrock API key from backend/.env, merging its output into the case's
-    analysis state without overwriting or conflicting with other agent modules.
+    analysis state and refreshing the 360° Client Executive Summary.
     """
     case_obj = _find_case(db, case_id)
-    valid_ids = {a["agentId"] for a in AGENT_CATALOG}
+    valid_ids = {a["agentId"] for a in AGENT_CATALOG} | {
+        "kyc_identity", "income_crosscheck", "dti_affordability", "aml_fraud_risk", "smart_remediation"
+    }
     if agent_id not in valid_ids:
         raise HTTPException(status_code=400, detail=f"Unknown modular agent: {agent_id}")
 
-    # Run the targeted modular agent
     module_output = execute_single_modular_agent(agent_id, case_obj)
+    canonical_id = module_output.get("agentId", agent_id)
     now = datetime.utcnow()
 
-    # Check if an analysis record already exists for this case
     analysis = (
         db.query(AIAnalysis)
         .filter(AIAnalysis.case_id == case_obj.id)
@@ -116,10 +134,18 @@ def run_modular_agent_on_case(
     )
 
     if not analysis:
-        # Initialize baseline analysis record so citations, PII shield, and math are ready
         base_result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
         metrics_dict = base_result["metrics"]
-        metrics_dict["modularResults"] = {agent_id: module_output}
+        modular_results = {canonical_id: module_output}
+        metrics_dict["modularResults"] = modular_results
+        summary_360 = build_client_executive_summary_360(
+            case_obj=case_obj,
+            modular_results=modular_results,
+            feasibility_math=base_result["feasibilityMath"],
+            findings=base_result["findings"],
+            remediation=base_result["remediation"],
+        )
+        metrics_dict["clientSummary360"] = summary_360
 
         analysis_uid = f"analysis-{case_obj.case_number}-{uuid.uuid4().hex[:6]}"
         analysis = AIAnalysis(
@@ -127,7 +153,7 @@ def run_modular_agent_on_case(
             case_id=case_obj.id,
             status="completed",
             engine_used=module_output.get("engineUsed", base_result["engineUsed"]),
-            summary=module_output.get("aiNarrative", base_result["summary"]),
+            summary=summary_360.get("executiveNarrative", base_result["summary"]),
             risk_score=base_result["riskScore"],
             human_decision="pending",
             pii_masking_json=json.dumps(base_result["piiMasking"], ensure_ascii=False),
@@ -146,23 +172,36 @@ def run_modular_agent_on_case(
     else:
         metrics_dict = json.loads(analysis.metrics_json or "{}")
         modular_results = metrics_dict.get("modularResults", {})
-        modular_results[agent_id] = module_output
+        modular_results[canonical_id] = module_output
         metrics_dict["modularResults"] = modular_results
+
+        feasibility_math = json.loads(analysis.feasibility_math_json or "{}")
+        findings = json.loads(analysis.findings_json or "[]")
+        remediation = json.loads(analysis.remediation_json or "{}")
+        summary_360 = build_client_executive_summary_360(
+            case_obj=case_obj,
+            modular_results=modular_results,
+            feasibility_math=feasibility_math,
+            findings=findings,
+            remediation=remediation,
+        )
+        metrics_dict["clientSummary360"] = summary_360
+
         analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
+        analysis.summary = summary_360.get("executiveNarrative", analysis.summary)
         analysis.engine_used = module_output.get("engineUsed", analysis.engine_used)
         analysis.completed_at = now
 
-        # Append to execution trace without conflict
         trace_list = json.loads(analysis.execution_trace_json or "[]")
         trace_list.append({
             "step": len(trace_list) + 1,
             "agent": module_output["name"],
-            "tool": f"modular_agent:{agent_id} + aws_bedrock",
+            "tool": f"modular_agent:{canonical_id} + aws_bedrock",
             "executionMode": "on_demand_modular",
             "status": "completed",
             "durationMs": 540,
             "timestamp": now.isoformat() + "Z",
-            "outputSummary": module_output["aiNarrative"][:160],
+            "outputSummary": module_output["aiNarrative"][:180],
         })
         analysis.execution_trace_json = json.dumps(trace_list, ensure_ascii=False)
 
@@ -170,14 +209,14 @@ def run_modular_agent_on_case(
         case_id=case_obj.id,
         action=f"Modular AI Agent Executed: {module_output['name']}",
         performed_by="Raiffeisen AI Copilot (AWS Bedrock)",
-        details=f"Module '{agent_id}' completed ({module_output['badgeText']}). {module_output['aiNarrative'][:140]}",
+        details=f"Module '{canonical_id}' completed ({module_output['badgeText']}). {module_output['aiNarrative'][:140]}",
         timestamp=now,
     )
     db.add(audit_log)
     db.commit()
     db.refresh(analysis)
 
-    return _serialize_analysis(analysis, case_obj.case_number)
+    return _serialize_analysis(analysis, case_obj.case_number, case_obj=case_obj)
 
 
 @router.post("/cases/{case_id}/analysis", response_model=AIAnalysisResponse)
@@ -189,19 +228,25 @@ def start_case_analysis(
     """
     API Contract:
     POST /api/cases/{caseId}/analysis
-    Executes the full multi-agent orchestration pipeline and populates all modular agent cards.
-    Uses the backend-configured AWS_API_KEY automatically.
+    Executes the full 3-pillar orchestration pipeline and generates the complete 360° Client Executive Summary.
     """
     case_obj = _find_case(db, case_id)
     result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
 
-    # Also populate modular results for all registered agents so all cards can be expanded
     modular_results = {}
     for agent_meta in AGENT_CATALOG:
         aid = agent_meta["agentId"]
         modular_results[aid] = execute_single_modular_agent(aid, case_obj)
 
     result["metrics"]["modularResults"] = modular_results
+    summary_360 = build_client_executive_summary_360(
+        case_obj=case_obj,
+        modular_results=modular_results,
+        feasibility_math=result["feasibilityMath"],
+        findings=result["findings"],
+        remediation=result["remediation"],
+    )
+    result["metrics"]["clientSummary360"] = summary_360
 
     analysis_uid = f"analysis-{case_obj.case_number}-{uuid.uuid4().hex[:6]}"
     now = datetime.utcnow()
@@ -210,8 +255,8 @@ def start_case_analysis(
         analysis_uid=analysis_uid,
         case_id=case_obj.id,
         status="completed",
-        engine_used=result["engineUsed"],
-        summary=result["summary"],
+        engine_used=summary_360.get("engineUsed", result["engineUsed"]),
+        summary=summary_360.get("executiveNarrative", result["summary"]),
         risk_score=result["riskScore"],
         human_decision="pending",
         pii_masking_json=json.dumps(result["piiMasking"], ensure_ascii=False),
@@ -232,12 +277,12 @@ def start_case_analysis(
     green_flags = result["metrics"]["greenFlagsCount"]
     audit_log = AuditLog(
         case_id=case_obj.id,
-        action="Raiffeisen AI Copilot Full Suite Executed",
+        action="Raiffeisen AI Copilot Full 3-Pillar Suite + 360° Summary Executed",
         performed_by="Raiffeisen AI Copilot + Consultant 024",
         details=(
             f"Analysis #{analysis_uid} completed in {result['metrics']['aiProcessingSeconds']}s. "
-            f"Findings: {red_flags} alerts (Red Flags), {green_flags} validations (Green Flags). "
-            f"Calculated Debt-to-Income (DTI): {result['feasibilityMath']['dti_percentage']}%."
+            f"Findings: {red_flags} alerts, {green_flags} validations. "
+            f"DTI: {result['feasibilityMath']['dti_percentage']}%. Verdict: {summary_360['verdictLabel']}."
         ),
         timestamp=now,
     )
@@ -245,7 +290,7 @@ def start_case_analysis(
     db.commit()
     db.refresh(analysis)
 
-    return _serialize_analysis(analysis, case_obj.case_number)
+    return _serialize_analysis(analysis, case_obj.case_number, case_obj=case_obj)
 
 
 @router.get("/analyses/{analysis_id}", response_model=AIAnalysisResponse)
@@ -254,7 +299,7 @@ def get_analysis_by_uid(analysis_id: str, db: Session = Depends(get_db)):
     if not analysis:
         raise HTTPException(status_code=404, detail="AI Analysis not found.")
     case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
-    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
+    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id), case_obj=case_obj)
 
 
 @router.get("/cases/{case_id}/analysis", response_model=Optional[AIAnalysisResponse])
@@ -268,7 +313,7 @@ def get_latest_case_analysis(case_id: int, db: Session = Depends(get_db)):
     )
     if not analysis:
         return None
-    return _serialize_analysis(analysis, case_obj.case_number)
+    return _serialize_analysis(analysis, case_obj.case_number, case_obj=case_obj)
 
 
 @router.patch("/analyses/{analysis_id}/findings/{finding_id}", response_model=AIAnalysisResponse)
@@ -343,6 +388,19 @@ def resolve_finding_human_in_the_loop(
     analysis.feasibility_math_json = json.dumps(feasibility_math, ensure_ascii=False)
     analysis.workflow_checklist_json = json.dumps(checklist, ensure_ascii=False)
 
+    if case_obj is not None:
+        metrics_dict = json.loads(analysis.metrics_json or "{}")
+        remediation = json.loads(analysis.remediation_json or "{}")
+        modular_results = metrics_dict.get("modularResults", {})
+        metrics_dict["clientSummary360"] = build_client_executive_summary_360(
+            case_obj=case_obj,
+            modular_results=modular_results,
+            feasibility_math=feasibility_math,
+            findings=findings,
+            remediation=remediation,
+        )
+        analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
+
     log = AuditLog(
         case_id=analysis.case_id,
         action=f"Human Review Sign-off ({target_finding.get('fieldLabel', finding_id)})",
@@ -357,7 +415,7 @@ def resolve_finding_human_in_the_loop(
     db.commit()
     db.refresh(analysis)
 
-    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
+    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id), case_obj=case_obj)
 
 
 @router.post("/analyses/{analysis_id}/remediation/send", response_model=AIAnalysisResponse)
@@ -384,6 +442,10 @@ def send_remediation_notification(
     if case_obj:
         case_obj.status = "pending"
         case_obj.updated_at = datetime.utcnow()
+        metrics_dict = json.loads(analysis.metrics_json or "{}")
+        if "clientSummary360" in metrics_dict:
+            metrics_dict["clientSummary360"]["remediation"] = remediation
+            analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
 
     log = AuditLog(
         case_id=analysis.case_id,
@@ -399,7 +461,7 @@ def send_remediation_notification(
     db.commit()
     db.refresh(analysis)
 
-    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
+    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id), case_obj=case_obj)
 
 
 @router.post("/analyses/{analysis_id}/human-decision", response_model=AIAnalysisResponse)
@@ -457,4 +519,4 @@ def submit_final_human_decision(
     db.commit()
     db.refresh(analysis)
 
-    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id))
+    return _serialize_analysis(analysis, case_obj.case_number if case_obj else str(analysis.case_id), case_obj=case_obj)
