@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, Text, DateTime, ForeignKey, Boolean, Numeric, Date
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -146,3 +146,46 @@ class AIAnalysis(Base):
     completed_at = Column(DateTime, default=datetime.utcnow)
 
     case = relationship("Case", back_populates="ai_analyses")
+
+
+# Separate tables extend existing databases without altering client records.
+class FinancialProfile(Base):
+    __tablename__ = "financial_profiles"
+
+    client_id = Column(Integer, ForeignKey("clients.id"), primary_key=True)
+    monthly_salary = Column(Numeric(14, 2), nullable=False)
+    other_monthly_income = Column(Numeric(14, 2), nullable=False, default=0)
+    currency = Column(String(3), nullable=False, default="EUR")
+    marital_status = Column(String(20), nullable=False, default="unknown")
+    number_of_children = Column(Integer, nullable=False, default=0)
+    as_of_date = Column(Date, nullable=False)
+    is_demo = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expenses = relationship("ClientExpense", cascade="all, delete-orphan", order_by="ClientExpense.id")
+    credits = relationship("ClientCredit", cascade="all, delete-orphan", order_by="ClientCredit.id")
+
+
+class ClientExpense(Base):
+    __tablename__ = "client_expenses"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("financial_profiles.client_id"), nullable=False, index=True)
+    category = Column(String(40), nullable=False)
+    monthly_amount = Column(Numeric(14, 2), nullable=False)
+    verification_status = Column(String(20), nullable=False, default="declared")
+    evidence_note = Column(Text, nullable=True)
+
+
+class ClientCredit(Base):
+    __tablename__ = "client_credits"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("financial_profiles.client_id"), nullable=False, index=True)
+    lender = Column(String(150), nullable=False)
+    credit_type = Column(String(30), nullable=False)
+    original_amount = Column(Numeric(14, 2), nullable=False)
+    remaining_balance = Column(Numeric(14, 2), nullable=False)
+    monthly_payment = Column(Numeric(14, 2), nullable=False)
+    interest_rate_annual = Column(Numeric(7, 4), nullable=True)
+    remaining_term_months = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="active")

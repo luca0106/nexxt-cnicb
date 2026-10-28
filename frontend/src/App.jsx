@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import CasesList from './pages/CasesList';
 import CaseDetail from './pages/CaseDetail';
 import ClientsList from './pages/ClientsList';
+import ClientFinancialProfile from './pages/ClientFinancialProfile';
 import DocumentsList from './pages/DocumentsList';
 import TasksList from './pages/TasksList';
 import HistoryList from './pages/HistoryList';
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="cases" element={<CasesList />} />
           <Route path="cases/:id" element={<CaseDetail />} />
           <Route path="clients" element={<ClientsList />} />
+          <Route path="clients/:id/finances" element={<ClientFinancialProfile />} />
           <Route path="documents" element={<DocumentsList />} />
           <Route path="tasks" element={<TasksList />} />
           <Route path="history" element={<HistoryList />} />

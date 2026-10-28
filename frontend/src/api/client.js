@@ -158,3 +158,30 @@ export async function submitHumanDecision(analysisId, payload) {
   if (!res.ok) throw new Error('Failed to record underwriting decision');
   return res.json();
 }
+
+export async function fetchClientById(id, signal) {
+  const res = await fetch(`${API_BASE}/clients/${id}`, { signal });
+  if (!res.ok) throw new Error('Could not load this client.');
+  return res.json();
+}
+
+export async function fetchFinancialProfile(id, signal) {
+  const res = await fetch(`${API_BASE}/clients/${id}/financial-profile`, { signal });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Could not load the financial profile. Please retry.');
+  return res.json();
+}
+
+export async function saveFinancialProfile(id, data) {
+  const res = await fetch(`${API_BASE}/clients/${id}/financial-profile`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = Array.isArray(body.detail)
+      ? body.detail.map(item => `${item.loc.slice(1).join('.')}: ${item.msg}`).join('; ')
+      : body.detail;
+    throw new Error(detail || 'Could not save the profile. Please retry.');
+  }
+  return res.json();
+}
