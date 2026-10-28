@@ -17,6 +17,8 @@ from ..schemas import (
     FindingResolutionRequest,
     RemediationTriggerRequest,
     HumanDecisionRequest,
+    CopilotChatRequest,
+    CopilotChatResponse,
 )
 from ..agents.orchestrator import execute_multi_agent_pipeline, calculate_feasibility_math
 from ..agents.modular_agents import (
@@ -26,7 +28,7 @@ from ..agents.modular_agents import (
     refresh_modular_results_after_resolution,
     AGENT_CATALOG,
 )
-from ..agentic import LLMError, agent_available, run_agentic_review
+from ..agentic import LLMError, agent_available, chat_with_case, run_agentic_review
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["Raiffeisen AI Copilot (Multi-Agent Extension)"])
@@ -386,6 +388,20 @@ def get_latest_case_analysis(case_id: int, db: Session = Depends(get_db)):
     if not analysis:
         return None
     return _serialize_analysis(analysis, case_obj.case_number, case_obj=case_obj)
+
+
+@router.post("/analyses/{analysis_id}/chat", response_model=CopilotChatResponse)
+def chat_about_analysis(analysis_id: str, payload: CopilotChatRequest, db: Session = Depends(get_db)):
+    """Agentic RAG over a finished analysis. Read-only: nothing in the case or the analysis is changed."""
+    analysis = db.query(AIAnalysis).filter(AIAnalysis.analysis_uid == analysis_id).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="AI Analysis not found.")
+    case_obj = db.query(Case).filter(Case.id == analysis.case_id).first()
+    if not case_obj:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    serialized = _serialize_analysis(analysis, case_obj.case_number, case_obj=case_obj).model_dump()
+    return chat_with_case(case_obj, serialized, payload.message.strip(),
+                          [t.model_dump() for t in payload.history])
 
 
 @router.patch("/analyses/{analysis_id}/findings/{finding_id}", response_model=AIAnalysisResponse)

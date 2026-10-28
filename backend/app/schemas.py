@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Client schemas
@@ -236,6 +236,25 @@ class HumanDecisionRequest(BaseModel):
     decision: str  # approve, request_clarification, reject
     officer_comments: Optional[str] = None
     apply_extracted_data: bool = True
+
+
+class CopilotChatTurn(BaseModel):
+    role: str  # user, assistant
+    content: str
+
+
+class CopilotChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    history: List[CopilotChatTurn] = Field(default_factory=list, max_length=40)
+
+
+class CopilotChatResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+    steps: List[Dict[str, Any]]
+    mode: str  # agentic_rag, retrieval_only
+    engineUsed: str
+    durationMs: int
 
 
 class AIAnalysisResponse(BaseModel):

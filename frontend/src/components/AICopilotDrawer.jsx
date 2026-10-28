@@ -25,7 +25,7 @@ import {
   Layers,
   Cpu,
   User,
-  TrendingUp, Code2, Power
+  TrendingUp, Code2, Power, MessageSquare
 } from 'lucide-react';
 import {
   fetchCaseAgents,
@@ -36,6 +36,7 @@ import {
   submitHumanDecision
 } from '../api/client';
 import { useExternalPlugin } from '../plugin/PluginContext';
+import CopilotChat from './CopilotChat';
 
 function AgentReportCard({ analysis }) {
   const m = analysis?.metrics;
@@ -125,13 +126,15 @@ export default function AICopilotDrawer({
   const navigate = useNavigate();
   const { hostBankProfile, setIsIntegrationModalOpen, setIsPluginConnected } = useExternalPlugin();
   const inlinePreviewRef = useRef(null);
+  const tabsRef = useRef(null);
 
   const [analysis, setAnalysis] = useState(initialAnalysis || null);
   const [agentCatalog, setAgentCatalog] = useState(DEFAULT_AGENT_CATALOG);
   const [runningAll, setRunningAll] = useState(false);
   const [runningAgentId, setRunningAgentId] = useState(null);
   const [expandedModules, setExpandedModules] = useState({});
-  const [activeTab, setActiveTab] = useState('modular_hub'); // modular_hub, summary_360, findings, math, remediation, pii_data, trace
+  const [activeTab, setActiveTab] = useState('modular_hub'); // modular_hub, summary_360, ask, findings, math, remediation, pii_data, trace
+  const [chatByAnalysis, setChatByAnalysis] = useState({}); // analysisId -> chat messages
   const [showMaskedPii, setShowMaskedPii] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [officerComment, setOfficerComment] = useState('');
@@ -756,6 +759,19 @@ export default function AICopilotDrawer({
             <span>{runningAll ? 'Running Full Analysis...' : 'Run Full Analysis + 360° Summary'}</span>
           </button>
 
+          {analysis?.analysisId && (
+            <button
+              onClick={() => {
+                setActiveTab('ask');
+                setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+              }}
+              className="px-3 py-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-amber-500/40 text-amber-300 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Ask Copilot</span>
+            </button>
+          )}
+
           {onToggleViewMode && (
             <button
               onClick={onToggleViewMode}
@@ -931,8 +947,7 @@ export default function AICopilotDrawer({
               {onSelectCitation && (
                 <button
                   onClick={() =>
-                    onSelectCitation,
-  isStandalonePage = false(
+                    onSelectCitation(
                       inlinePreviewDoc.doc.id,
                       inlinePreviewDoc.lineNumber,
                       null,
@@ -995,7 +1010,7 @@ export default function AICopilotDrawer({
       ) : (
         <>
           {/* Navigation Tabs */}
-          <div className="px-4 sm:px-6 pt-3 bg-[#091224] border-b border-[#1b2c4d] flex items-center gap-1.5 overflow-x-auto">
+          <div ref={tabsRef} className="px-4 sm:px-6 pt-3 bg-[#091224] border-b border-[#1b2c4d] flex items-center gap-1.5 overflow-x-auto">
             <button
               onClick={() => setActiveTab('modular_hub')}
               className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
@@ -1018,6 +1033,18 @@ export default function AICopilotDrawer({
             >
               <Sparkles className="w-4 h-4" />
               <span>360° Client Summary</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ask')}
+              className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'ask'
+                  ? 'border-amber-400 text-amber-300 bg-[#0e182e]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Ask Copilot</span>
             </button>
 
             <button
@@ -1089,6 +1116,17 @@ export default function AICopilotDrawer({
           <div className="p-4 sm:p-6 space-y-5">
             {/* TAB: DEDICATED 360° CLIENT SUMMARY */}
             {activeTab === 'summary_360' && renderClientExecutiveSummary360(clientSummary360)}
+
+            {/* TAB: AGENTIC RAG CHAT OVER THE FINISHED ANALYSIS */}
+            {activeTab === 'ask' && analysis?.analysisId && (
+              <CopilotChat
+                analysisId={analysis.analysisId}
+                messages={chatByAnalysis[analysis.analysisId] || []}
+                onMessagesChange={(msgs) => setChatByAnalysis((prev) => ({ ...prev, [analysis.analysisId]: msgs }))}
+                onCitationClick={handleCitationClick}
+                onOpenFindings={() => setActiveTab('findings')}
+              />
+            )}
 
             {/* TAB 0: 3 CORE PILLARS + COMPLETE 360° CLIENT SUMMARY AT THE BOTTOM */}
             {activeTab === 'modular_hub' && (

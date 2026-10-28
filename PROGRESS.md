@@ -1,6 +1,6 @@
 # Progres
 
-Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă și verificările din sesiunea de dezvoltare.
+Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă și verificările din sesiunea de dezvoltare.
 
 ## Implementat
 
@@ -27,19 +27,34 @@ Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă �
      - Rută dedicată `/plugin` și `/plugin/:id` care deschide consola B2B standalone a plugin-ului în afara layout-ului `BankDesk`, sincronizată prin REST API cu dosarele host-ului.
      - Modal de arhitectură B2B, snippet SDK (`FinSightPlugin.mount(...)`) și contract REST API (`/api/plugin/manifest`).
 
+  7. **Agentic RAG după analiză (`backend/app/agentic/chat.py`, `POST /api/analyses/{id}/chat`, tab-ul `Ask Copilot` din `CopilotChat.jsx`)**:
+     - Index BM25 per dosar, fără dependențe noi: liniile documentelor, findings, politicile de credit, rapoartele specialiștilor, rezumatul 360°, calculul DTI și profilul financiar.
+     - Claude (Bedrock) decide singur ce caută (`search_case`, `read_document`, `get_analysis`, `what_if_dti`) și răspunde cu citări numerotate `[n]`; o citare către o sursă neregăsită în conversație este respinsă.
+     - Doar citire: chat-ul nu modifică findings, decizii sau date. Scenariile `what_if_dti` folosesc `calculate_feasibility_math`, sunt marcate `hypothetical` și nu se salvează.
+     - Textul trimis la LLM trece prin `PIIShield`, la fel ca în agentul de review. Fără LLM configurat, endpoint-ul răspunde în modul `retrieval_only` cu pasajele cele mai relevante.
+     - Mesajele care sunt doar salut sau mulțumire (EN/RO, de ex. „what's up”, „salut, ce faci?”, „mersi”) primesc un răspuns scurt fără LLM (`mode: small_talk`); un salut urmat de o întrebare merge la agent. Întrebările fără legătură cu dosarul primesc o singură propoziție. Moneda dosarului este transmisă explicit modelului.
+     - Citările de document deschid linia exactă în preview; cele de tip finding deschid tab-ul de findings. Conversația se păstrează în memorie per analiză, nu în baza de date.
+
 ## Date demo
 
 La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit, 965 documente, 188 sarcini operaționale, 374 intrări de audit, 218 profiluri financiare, 1.823 cheltuieli și 124 credite**. Acestea sunt valori sintetice, nu date bancare reale. Numerele se pot schimba după editări; nu sunt garanții pentru orice bază de date configurată.
 
 ## Verificări efectuate
 
-- Cele 11 teste din `backend/tests/` (`test_financial_profiles.py` și `test_agentic.py`) au trecut.
+- Cele 18 teste din `backend/tests/` (`test_financial_profiles.py`, `test_agentic.py`, `test_chat.py`) au trecut (2026-10-29, Python 3.14 din Windows).
+- `POST /api/analyses/{id}/chat` a fost verificat prin `TestClient` pe o copie a bazei locale: modul `retrieval_only`, 404 pentru analiză inexistentă, 422 pentru mesaj gol, plus un apel live Bedrock (`agentic_rag`, 6 pași, 7 citări valide, ~27 s).
 - `npm run build` a trecut după actualizarea UI-ului AI Copilot și rezolvarea tuturor referințelor de la butoane.
 - Endpoint-urile `/api/cases/{id}/analysis` și `/api/cases/{id}/agents/{agent_id}/run` au fost verificate live cu AWS Bedrock (`Amazon Nova Pro`).
 - Toate profilurile locale au trecut validarea `FinancialProfileOut`; nu existau clienți fără profil.
+- Verificare în browser (desktop) a tab-ului **Ask Copilot** pe dosarul #10482: răspuns cu surse, citarea deschide și evidențiază linia exactă în viewer.
+- Reparat un crash de render din `AICopilotDrawer.jsx` (rest de editare `isStandalonePage = false(` din commit-ul `d23923a`) care golea pagina la deschiderea preview-ului unei citări.
 - `git diff --check` a trecut după implementare.
 
 ## Limite cunoscute
+
+- `uvicorn --reload` s-a blocat la reîncărcare în folderul OneDrive (a rămas la „Reloading...” și a servit codul vechi); după modificări în backend, repornește serverul.
+
+- Chat-ul RAG nu persistă conversațiile și nu scrie în Audit Trail; reîncărcarea paginii golește istoricul. Retrieval-ul este lexical (BM25), nu semantic.
 
 - Profilurile sunt snapshot-uri independente: salvarea în `PUT /api/clients/{id}/financial-profile` nu suprascrie automat câmpurile vechi din `clients`, dar copilotul citește acum ambele surse și evidențiază eventualele diferențe.
 - Schimbarea monedei în UI schimbă eticheta, fără conversia sumelor.

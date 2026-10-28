@@ -170,6 +170,16 @@ export async function sendRemediationNotification(analysisId, payload = {}) {
   return res.json();
 }
 
+export async function chatWithAnalysis(analysisId, message, history = []) {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
+  });
+  if (!res.ok) throw new Error('The copilot could not answer this question.');
+  return res.json();
+}
+
 export async function submitHumanDecision(analysisId, payload) {
   const res = await fetch(`${API_BASE}/analyses/${analysisId}/human-decision`, {
     method: 'POST',
