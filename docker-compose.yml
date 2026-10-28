@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bankdesk_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bankuser
+      POSTGRES_PASSWORD: bankpassword
+      POSTGRES_DB: bankdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bankuser -d bankdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bankdesk_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://bankuser:bankpassword@postgres:5432/bankdesk
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bankdesk_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3001}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
