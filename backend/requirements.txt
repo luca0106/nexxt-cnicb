@@ -6,3 +6,5 @@ pydantic==2.10.4
 python-multipart==0.0.20
 python-dotenv==1.0.1
 
+anthropic[bedrock]==2.3.0
+langgraph==1.2.18

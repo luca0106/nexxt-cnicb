@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any, List
@@ -21,7 +22,9 @@ from ..agents.modular_agents import (
     build_client_executive_summary_360,
     AGENT_CATALOG,
 )
+from ..agentic import LLMError, agent_available, run_agentic_review
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["Raiffeisen AI Copilot (Multi-Agent Extension)"])
 
 
@@ -231,14 +234,26 @@ def start_case_analysis(
     Executes the full 3-pillar orchestration pipeline and generates the complete 360° Client Executive Summary.
     """
     case_obj = _find_case(db, case_id)
-    result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
+    agent_mode = agent_available()
+    if agent_mode:
+        try:
+            result = run_agentic_review(case_obj)
+        except LLMError as exc:
+            log.warning("review agent unavailable, falling back to the deterministic pipeline: %s", exc)
+            agent_mode = False
+    if not agent_mode:
+        result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
 
-    modular_results = {}
+    # Specialists the agent already ran are reused; the rest run deterministically so every card is filled
+    modular_results = dict(result.pop("modularResults", None) or {})
     for agent_meta in AGENT_CATALOG:
         aid = agent_meta["agentId"]
-        modular_results[aid] = execute_single_modular_agent(aid, case_obj)
+        if aid not in modular_results:
+            modular_results[aid] = execute_single_modular_agent(aid, case_obj)
 
     result["metrics"]["modularResults"] = modular_results
+    if result.get("companyVerification"):
+        result["metrics"]["companyVerification"] = result.pop("companyVerification")
     summary_360 = build_client_executive_summary_360(
         case_obj=case_obj,
         modular_results=modular_results,
@@ -255,8 +270,9 @@ def start_case_analysis(
         analysis_uid=analysis_uid,
         case_id=case_obj.id,
         status="completed",
-        engine_used=summary_360.get("engineUsed", result["engineUsed"]),
-        summary=summary_360.get("executiveNarrative", result["summary"]),
+        # In agent mode the agent's own report is the analysis; the 360° synthesis stays in metrics
+        engine_used=result["engineUsed"] if agent_mode else summary_360.get("engineUsed", result["engineUsed"]),
+        summary=result["summary"] if agent_mode else summary_360.get("executiveNarrative", result["summary"]),
         risk_score=result["riskScore"],
         human_decision="pending",
         pii_masking_json=json.dumps(result["piiMasking"], ensure_ascii=False),
@@ -277,10 +293,12 @@ def start_case_analysis(
     green_flags = result["metrics"]["greenFlagsCount"]
     audit_log = AuditLog(
         case_id=case_obj.id,
-        action="Raiffeisen AI Copilot Full 3-Pillar Suite + 360° Summary Executed",
+        action=("Autonomous Review Agent (Claude) + 360° Summary Executed" if agent_mode
+                else "Raiffeisen AI Copilot Full 3-Pillar Suite + 360° Summary Executed"),
         performed_by="Raiffeisen AI Copilot + Consultant 024",
         details=(
-            f"Analysis #{analysis_uid} completed in {result['metrics']['aiProcessingSeconds']}s. "
+            f"Analysis #{analysis_uid} completed in {result['metrics']['aiProcessingSeconds']}s"
+            + (f" ({result['metrics']['agentToolCalls']} agent tool calls). " if agent_mode else ". ") +
             f"Findings: {red_flags} alerts, {green_flags} validations. "
             f"DTI: {result['feasibilityMath']['dti_percentage']}%. Verdict: {summary_360['verdictLabel']}."
         ),

@@ -28,6 +28,13 @@ class Settings(BaseModel):
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "").strip()
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 
+    # Autonomous review agent (Claude on AWS Bedrock, LangGraph planner loop)
+    AWS_BEARER_TOKEN_BEDROCK: str = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-west-2").strip()
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "us.anthropic.claude-opus-5-5").strip()
+    AGENT_MAX_STEPS: int = int(os.getenv("AGENT_MAX_STEPS", "15"))
+    AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "true").strip().lower() != "false"
+
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",

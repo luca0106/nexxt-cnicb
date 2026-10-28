@@ -42,6 +42,50 @@ import {
   submitHumanDecision
 } from '../api/client';
 
+function AgentReportCard({ analysis }) {
+  const m = analysis?.metrics;
+  if (!m?.agentMode) return null;
+  const agentFindings = (analysis.findings || []).filter((f) => f.source === 'review_agent');
+  const company = m.companyVerification;
+  return (
+    <div className="p-4 sm:p-5 rounded-2xl bg-[#0a1326] border border-violet-500/40 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Bot className="w-5 h-5 text-violet-300" />
+          <h4 className="text-sm sm:text-base font-bold text-white">Autonomous Review Agent</h4>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+            {analysis.engineUsed}
+          </span>
+        </div>
+        <span className="text-xs font-mono text-slate-400">
+          {m.agentToolCalls}/{m.agentMaxSteps} tool calls • {m.aiProcessingSeconds}s
+        </span>
+      </div>
+      <p className="text-sm text-slate-200 leading-relaxed">{analysis.summary}</p>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="px-2 py-1 rounded-lg bg-[#101c36] border border-[#1e3158] text-slate-300">
+          {agentFindings.length} finding(s) added by the agent
+        </span>
+        {company && (
+          <span className={`px-2 py-1 rounded-lg border ${company.found ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
+            Employer {company.companyName}: {company.found ? company.status : 'not found in registry'}
+          </span>
+        )}
+        {m.requestedDocuments?.length > 0 && (
+          <span className="px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">
+            Waiting for: {m.requestedDocuments.map((d) => d.documentType).join(', ')}
+          </span>
+        )}
+        {m.agentUnverified?.length > 0 && (
+          <span className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300">
+            Not verified: {m.agentUnverified.join('; ')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const DEFAULT_AGENT_CATALOG = [
   {
     agentId: 'dti_repayment_capacity',
@@ -557,7 +601,7 @@ export default function AICopilotDrawer({
               <span>Case #{caseData?.case_number} ({caseData?.title})</span>
               <span>•</span>
               <span className="text-blue-400 flex items-center gap-1 font-medium">
-                <Cpu className="w-3 h-3" /> AWS Bedrock (Nova Pro)
+                <Cpu className="w-3 h-3" /> {analysis?.metrics?.agentMode ? 'Claude on AWS Bedrock' : 'AWS Bedrock (Nova Pro)'}
               </span>
               <span>•</span>
               <span className="text-emerald-400 flex items-center gap-1 font-medium">
@@ -890,6 +934,7 @@ export default function AICopilotDrawer({
             {/* TAB 0: 3 CORE PILLARS + COMPLETE 360° CLIENT SUMMARY AT THE BOTTOM */}
             {activeTab === 'modular_hub' && (
               <div className="space-y-5">
+                <AgentReportCard analysis={analysis} />
                 {executedModulesCount === 0 && !clientSummary360 ? (
                   <div className="p-6 rounded-2xl bg-[#0a1326] border border-[#1b2d50] text-center space-y-3">
                     <p className="text-sm text-slate-300">
@@ -1607,6 +1652,7 @@ export default function AICopilotDrawer({
             {/* TAB 5: EXECUTION TRACE */}
             {activeTab === 'trace' && (
               <div className="space-y-5">
+                <AgentReportCard analysis={analysis} />
                 <div className="space-y-2.5">
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400">
                     Execution Trace (Technical Audit Trail):
@@ -1625,8 +1671,11 @@ export default function AICopilotDrawer({
                         </span>
                       </div>
                       <div className="text-xs text-blue-300 font-mono">
-                        Tool: {step.tool} ({step.executionMode})
+                        Tool: {step.tool}{step.toolInput ? `(${step.toolInput})` : ''} ({step.executionMode})
                       </div>
+                      {step.reason && (
+                        <p className="text-xs text-violet-300 italic">Why: {step.reason}</p>
+                      )}
                       <p className="text-slate-300">{step.outputSummary}</p>
                     </div>
                   ))}
