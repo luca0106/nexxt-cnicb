@@ -12,11 +12,19 @@ import {
   History,
   FileCheck,
   X,
-  Bot,
   Sparkles,
   Save,
   Plus,
-  Calculator
+  Calculator,
+  ShieldCheck,
+  CreditCard,
+  Building,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Phone,
+  Mail,
+  MapPin
 } from 'lucide-react';
 import {
   fetchCaseById,
@@ -27,6 +35,14 @@ import {
   createDocument
 } from '../api/client';
 import AICopilotDrawer from '../components/AICopilotDrawer';
+
+// Standard banking annuity formula
+const calculateMonthlyAnnuity = (principal, annualInterestRate, termMonths) => {
+  if (!principal || !termMonths || termMonths <= 0) return 0;
+  const r = (annualInterestRate || 8.9) / 100 / 12;
+  const payment = (principal * (r * Math.pow(1 + r, termMonths))) / (Math.pow(1 + r, termMonths) - 1);
+  return Math.round(payment * 100) / 100;
+};
 
 export default function CaseDetail() {
   const { id } = useParams();
@@ -40,12 +56,12 @@ export default function CaseDetail() {
   const [latestAnalysis, setLatestAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('documente'); // documente, fisa_verificare, sarcini, istoric
+  const [activeTab, setActiveTab] = useState('documente'); // documente, fisa_verificare, birou_credit, sarcini, istoric
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [highlightedLine, setHighlightedLine] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Copilot state: open/closed & viewMode ('split' | 'expanded')
+  // Copilot plugin state: open/closed & viewMode ('split' | 'expanded')
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [copilotViewMode, setCopilotViewMode] = useState('split');
 
@@ -108,7 +124,6 @@ export default function CaseDetail() {
     const nextState = !isCopilotOpen;
     setIsCopilotOpen(nextState);
     if (nextState && setIsSidebarCollapsed) {
-      // Collapse left menu automatically on desktop to give maximum breathing room for Split-View
       setIsSidebarCollapsed(true);
     }
     if (nextState) {
@@ -118,14 +133,11 @@ export default function CaseDetail() {
     }
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, customNote = null) => {
     try {
       setUpdatingStatus(true);
-      const updated = await updateCaseStatus(
-        caseData.id,
-        newStatus,
-        `Status modificat manual în ${newStatus}`
-      );
+      const note = customNote || `Status modificat manual în ${newStatus}`;
+      const updated = await updateCaseStatus(caseData.id, newStatus, note);
       setCaseData(updated);
       syncFormState(updated);
     } catch (err) {
@@ -188,7 +200,6 @@ export default function CaseDetail() {
     }
   };
 
-  // Called when clicking a citation inside AICopilotDrawer
   const handleSelectCitation = (documentId, lineNumber) => {
     if (!caseData?.documents) return;
     const foundDoc = caseData.documents.find((d) => d.id === documentId) || caseData.documents[0];
@@ -214,7 +225,7 @@ export default function CaseDetail() {
   if (loading) {
     return (
       <div className="p-12 text-center text-slate-400">
-        Se încarcă detaliile dosarului...
+        Se încarcă detaliile dosarului de credit...
       </div>
     );
   }
@@ -226,7 +237,7 @@ export default function CaseDetail() {
         <p className="text-red-300 font-medium">{error || 'Dosarul nu a fost găsit.'}</p>
         <button
           onClick={() => navigate('/dosare')}
-          className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs hover:bg-slate-700"
+          className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs hover:bg-slate-700 cursor-pointer"
         >
           Înapoi la lista dosarelor
         </button>
@@ -234,27 +245,50 @@ export default function CaseDetail() {
     );
   }
 
+  // Financial calculations
+  const monthlyRate = calculateMonthlyAnnuity(
+    caseData.requested_amount,
+    caseData.interest_rate_annual,
+    caseData.loan_term_months
+  );
+  const existingDebts = caseData.client.existing_monthly_debts || 0;
+  const totalMonthlyCommitments = monthlyRate + existingDebts;
+  const currentIncome = caseData.client.monthly_income || 1;
+  const dtiPercent = ((totalMonthlyCommitments / currentIncome) * 100).toFixed(1);
+  const isDtiCompliant = parseFloat(dtiPercent) <= 40.0;
+
+  // KYC validation checks
+  const isIdExpired = caseData.client.id_card_expiry
+    ? new Date(caseData.client.id_card_expiry) < new Date()
+    : false;
+
   const isSplitDesktop = isCopilotOpen && copilotViewMode === 'split';
 
   return (
     <div className="space-y-5 w-full min-w-0">
-      {/* Top back navigation & Scenario Pill */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Top back navigation & Banking Metadata Badges */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Înapoi la dosare</span>
+          <span>Înapoi la registru dosare</span>
         </button>
 
-        {caseData.scenario_tag && (
-          <span className="text-xs font-mono px-3 py-1 rounded-full bg-[#0e172a] border border-[#1e3158] text-slate-300 max-w-full truncate">
-            {caseData.scenario_tag === 'discrepancy_case' && 'Scenariu Demo 1: Discrepanțe Cross-Check (Venit 5.200 vs 5.700 RON & Nume Ion vs Ioan)'}
-            {caseData.scenario_tag === 'expired_id_case' && 'Scenariu Demo 2: Edge Case (Buletin Expirat → Auto-Remediere SMS/Email)'}
-            {caseData.scenario_tag === 'valid_green_case' && 'Scenariu Demo 3: Dosar Valid 100% (Green Flags & DTI < 40%)'}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="px-3 py-1 rounded-lg bg-[#0e172a] border border-[#1e3158] text-slate-300 font-medium flex items-center gap-1.5">
+            <Building className="w-3.5 h-3.5 text-blue-400" />
+            <span>{caseData.branch || 'Agenția Piața Unirii București'}</span>
           </span>
-        )}
+          <span className="px-3 py-1 rounded-lg bg-[#0e172a] border border-[#1e3158] text-slate-300 font-medium">
+            Canal: <strong className="text-white">{caseData.channel || 'Online Onboarding'}</strong>
+          </span>
+          <span className="px-3 py-1 rounded-lg bg-[#071b12] border border-[#14532d] text-emerald-300 font-medium flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Scor FICO: {caseData.client.fico_score || 715}</span>
+          </span>
+        </div>
       </div>
 
       {/* Case Header Card */}
@@ -276,18 +310,18 @@ export default function CaseDetail() {
               </span>
             </div>
             <p className="text-slate-300 text-xs sm:text-sm mt-1 font-medium">
-              {caseData.title} — Solicitant: <strong className="text-white">{caseData.client.full_name}</strong>
+              {caseData.title} — Titular: <strong className="text-white">{caseData.client.full_name}</strong> (CNP: <span className="font-mono text-slate-300">{caseData.client.cnp}</span>)
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
-              Înregistrat: {new Date(caseData.created_at).toLocaleString('ro-RO')} • Responsabil: {caseData.assigned_to}
+              Înregistrat: {new Date(caseData.created_at).toLocaleString('ro-RO')} • Responsabil dosar: <strong className="text-slate-400">{caseData.assigned_to}</strong>
             </p>
           </div>
         </div>
 
-        {/* Right Controls: Status Dropdown + Extension Trigger Button */}
+        {/* Right Controls: Official Status Dropdown + Optional Plugin AI Copilot Trigger */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-[#050811] px-3 py-2 rounded-xl border border-[#192742]">
-            <span className="text-xs text-slate-400">Status:</span>
+            <span className="text-xs text-slate-400">Status dosar:</span>
             <select
               value={caseData.status}
               disabled={updatingStatus}
@@ -296,33 +330,31 @@ export default function CaseDetail() {
             >
               <option value="in_lucru">În lucru</option>
               <option value="in_verificare">În verificare</option>
-              <option value="complet">Complet</option>
-              <option value="in_asteptare">În așteptare</option>
+              <option value="complet">Aprobat / Complet</option>
+              <option value="in_asteptare">În așteptare documente</option>
               <option value="respins">Respins</option>
             </select>
           </div>
 
+          {/* Plugin Copilot Trigger Button (Decoupled as external tool) */}
           <button
             onClick={handleOpenCopilot}
+            title="Deschide extensia de asistență AI pentru triaj și audit automat"
             className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg cursor-pointer active:scale-95 ${
               isCopilotOpen
-                ? 'bg-slate-800 text-amber-300 border border-amber-400/50'
-                : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-500/20'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-amber-400/10'
+                : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-amber-500/20'
             }`}
           >
-            <Bot className="w-4 h-4 stroke-[2.2]" />
-            <span>{isCopilotOpen ? 'Închide AI Copilot' : 'Raiffeisen AI Copilot (Triage & Audit)'}</span>
+            <Sparkles className="w-4 h-4 stroke-[2.2]" />
+            <span>{isCopilotOpen ? 'Ascunde Plugin Copilot' : 'Plugin AI Copilot'}</span>
           </button>
         </div>
       </div>
 
-      {/* Main Responsive Workspace Grid:
-          - When Copilot is closed: 100% width for BankDesk
-          - When Copilot is open in 'split' mode on xl screens: 6 cols BankDesk (Left) + 6 cols AI Copilot (Right)
-          - When Copilot is open in 'expanded' mode (or on < xl screens): AI Copilot appears prominently at full width above/alongside BankDesk!
-      */}
+      {/* Main Responsive Grid: BankDesk Native Interface + AI Copilot Drawer */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* If Copilot is in EXPANDED mode, render it across all 12 columns at the top */}
+        {/* If Copilot is in EXPANDED mode, render across full width at top */}
         {isCopilotOpen && copilotViewMode === 'expanded' && (
           <div ref={copilotContainerRef} className="xl:col-span-12 w-full min-w-0">
             <AICopilotDrawer
@@ -344,106 +376,208 @@ export default function CaseDetail() {
             isSplitDesktop ? 'xl:col-span-6' : 'xl:col-span-12'
           }`}
         >
-          {/* Client Info & Notes Cards */}
+          {/* Real Banking Summary Cards: 3 Analytical Panels */}
           <div className={`grid grid-cols-1 ${isSplitDesktop ? 'gap-4' : 'lg:grid-cols-3 gap-5'}`}>
-            {/* Client Summary Card */}
-            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5">
-              <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
-                <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span>Date Client în Sistem</span>
-                </div>
-                <button
-                  onClick={() => setActiveTab('fisa_verificare')}
-                  className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
-                >
-                  Editează manual
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-                <div>
-                  <span className="text-slate-400 block text-xs">Nume complet</span>
-                  <span className="text-slate-100 font-semibold">{caseData.client.full_name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">CNP</span>
-                  <span className="text-slate-200 font-mono">{caseData.client.cnp}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">Serie & Valabilitate CI</span>
-                  <span className="text-slate-200 font-mono text-xs">
-                    {caseData.client.id_card_series || 'RK 892011'} ({caseData.client.id_card_expiry || '2031-05-14'})
+            
+            {/* Panel 1: Date Solicitant & Identitate KYC */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
+                  <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span>Identitate & Date KYC</span>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {caseData.client.marital_status || 'Căsătorit'} • {caseData.client.dependents_count || 0} copii
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">Angajator</span>
-                  <span className="text-slate-200 truncate block">{caseData.client.employer || 'Nespecificat'}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-slate-400 block text-xs">Adresă înregistrată</span>
-                  <span className="text-slate-200">{caseData.client.address || 'N/A'}</span>
-                </div>
-              </div>
 
-              <div className="pt-3 border-t border-[#142036] flex flex-wrap justify-between items-center gap-2">
-                <div>
-                  <span className="text-slate-400 block text-xs">Venit net în sistem</span>
-                  <span className="text-emerald-400 font-bold text-sm sm:text-base">
-                    {caseData.client.monthly_income?.toLocaleString('ro-RO')} RON
-                  </span>
-                </div>
-                {caseData.requested_amount && (
-                  <div className="text-right">
-                    <span className="text-slate-400 block text-xs">Credit solicitat</span>
-                    <span className="text-blue-400 font-bold text-sm sm:text-base">
-                      {caseData.requested_amount?.toLocaleString('ro-RO')} {caseData.currency} ({caseData.loan_term_months} luni)
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Nume complet:</span>
+                    <span className="text-white font-semibold">{caseData.client.full_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">CNP:</span>
+                    <span className="text-slate-200 font-mono text-xs">{caseData.client.cnp}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Act Identitate:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-200 font-mono text-xs">{caseData.client.id_card_series || 'RK 892011'}</span>
+                      {isIdExpired ? (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">
+                          EXPIRAT
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">
+                          (val. {caseData.client.id_card_expiry || '2031-05-14'})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Domiciliu:</span>
+                    <span className="text-slate-200 truncate max-w-[180px] text-xs text-right" title={caseData.client.address}>
+                      {caseData.client.address || 'București'}
                     </span>
                   </div>
-                )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Telefon / Email:</span>
+                    <span className="text-slate-300 text-xs truncate max-w-[180px]">
+                      {caseData.client.phone || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">Verificare AML / PEP:</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                  {caseData.client.aml_status || 'Conform L129/2019'}
+                </span>
               </div>
             </div>
 
-            {/* Operational Notes Card */}
-            <div className={`${isSplitDesktop ? '' : 'lg:col-span-2'} p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
-              <div>
+            {/* Panel 2: Situație Profesională & Venituri */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
                   <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                    <FileCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Observații & Mențiuni Dosar (BankDesk)</span>
+                    <Building className="w-4 h-4 text-emerald-400" />
+                    <span>Situație Profesională & Venit</span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    Prioritate: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
+                    Vechime: {caseData.client.seniority_current_employer || '2 ani'}
                   </span>
                 </div>
 
-                <div className="mt-3 p-3.5 rounded-xl bg-[#050811] border border-[#142036] text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {caseData.notes || 'Nicio observație adițională înregistrată.'}
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Angajator:</span>
+                    <span className="text-white font-medium truncate max-w-[170px]" title={caseData.client.employer}>
+                      {caseData.client.employer || 'Nespecificat'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Tip contract:</span>
+                    <span className="text-slate-200 text-xs">
+                      {caseData.client.employment_contract_type || 'Perioadă nedeterminată'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Venit declarat cerere:</span>
+                    <span className="text-slate-200 font-semibold">
+                      {caseData.client.monthly_income?.toLocaleString('ro-RO')} RON
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Acord interogare ANAF:</span>
+                    <span className="text-emerald-400 font-medium text-xs">
+                      {caseData.client.anaf_consent ? 'Semnat electronic' : 'Neacordat (necesită adeverință)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Datorii lunare externe:</span>
+                    <span className="text-amber-400 font-semibold">
+                      {caseData.client.existing_monthly_debts?.toLocaleString('ro-RO')} RON / lună
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-[#0d1629] border border-[#1d2f52] text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 text-slate-200">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>
-                    {latestAnalysis
-                      ? `Ultima analiză AI (${latestAnalysis.analysisId}): ${latestAnalysis.metrics?.redFlagsCount || 0} Alerte (Red Flags), DTI ${latestAnalysis.feasibilityMath?.dti_percentage}%`
-                      : 'Dosarul poate fi analizat automat cu extensia Raiffeisen AI Copilot.'}
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">Venit net înregistrat:</span>
+                <span className="text-emerald-400 font-bold text-sm">
+                  {caseData.client.monthly_income?.toLocaleString('ro-RO')} RON
+                </span>
+              </div>
+            </div>
+
+            {/* Panel 3: Parametri Credit & Indicatori BNR (DTI) */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
+                  <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                    <Calculator className="w-4 h-4 text-blue-400" />
+                    <span>Parametri Credit & DTI (BNR)</span>
+                  </div>
+                  <span className="text-xs font-mono text-slate-300">
+                    {caseData.loan_term_months} luni
                   </span>
                 </div>
-                {!isCopilotOpen && (
-                  <button
-                    onClick={handleOpenCopilot}
-                    className="text-xs sm:text-sm font-bold text-amber-400 hover:text-amber-300 shrink-0 underline cursor-pointer"
-                  >
-                    {latestAnalysis ? 'Deschide Raportul AI →' : 'Pornește Triajul AI →'}
-                  </button>
-                )}
+
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Credit solicitat:</span>
+                    <span className="text-white font-bold text-sm">
+                      {caseData.requested_amount?.toLocaleString('ro-RO')} {caseData.currency}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Dobândă & DAE:</span>
+                    <span className="text-slate-200 text-xs">
+                      {caseData.interest_rate_annual}% ({caseData.interest_type || 'Fixă'}) • DAE {caseData.dae_percent || 9.42}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Rată lunară nouă:</span>
+                    <span className="text-blue-400 font-bold">
+                      {monthlyRate.toLocaleString('ro-RO')} RON / lună
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Total rate lunare:</span>
+                    <span className="text-slate-200 font-medium">
+                      {totalMonthlyCommitments.toLocaleString('ro-RO')} RON / lună
+                    </span>
+                  </div>
+
+                  {/* DTI Progress Bar */}
+                  <div className="pt-1">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-400 text-[11px]">Grad de îndatorare (DTI):</span>
+                      <span className={`font-bold text-xs ${isDtiCompliant ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {dtiPercent}% (Plafon BNR: 40%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#050811] h-2 rounded-full overflow-hidden border border-[#192742]">
+                      <div
+                        className={`h-full transition-all rounded-full ${
+                          isDtiCompliant ? 'bg-emerald-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(parseFloat(dtiPercent) * 2, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">Conformitate BNR:</span>
+                <span className={`font-semibold flex items-center gap-1 ${isDtiCompliant ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isDtiCompliant ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                  <span>{isDtiCompliant ? 'Eligibil (sub 40%)' : 'Depășit (> 40%)'}</span>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* BankDesk Tabs: Documente, Fișa de Verificare, Sarcini, Istoric */}
+          {/* Operational Notes Banner */}
+          <div className="p-4 rounded-xl bg-[#090f1e] border border-[#142036] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-start gap-2.5 text-slate-300">
+              <FileCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-white">Observații dosar: </span>
+                <span className="text-slate-300">{caseData.notes || 'Nicio observație adițională înregistrată.'}</span>
+              </div>
+            </div>
+            <span className="text-xs text-slate-400 shrink-0">
+              Prioritate dosar: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
+            </span>
+          </div>
+
+          {/* Official BankDesk Tabs: Documente, Fișă Verificare, Birou de Credit, Sarcini, Istoric */}
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -456,7 +590,7 @@ export default function CaseDetail() {
                   }`}
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Documente & Sursă ({caseData.documents.length})</span>
+                  <span>Documente Atașate ({caseData.documents.length})</span>
                 </button>
 
                 <button
@@ -468,7 +602,19 @@ export default function CaseDetail() {
                   }`}
                 >
                   <Calculator className="w-4 h-4" />
-                  <span>Fișă Verificare (Data Entry)</span>
+                  <span>Fișă Verificare Manuală (Data Entry)</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('birou_credit')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === 'birou_credit'
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Biroul de Credit (FICO {caseData.client.fico_score || 715})</span>
                 </button>
 
                 <button
@@ -492,7 +638,7 @@ export default function CaseDetail() {
                   }`}
                 >
                   <History className="w-4 h-4" />
-                  <span>Istoric ({caseData.history_entries.length})</span>
+                  <span>Jurnal Audit ({caseData.history_entries.length})</span>
                 </button>
               </div>
 
@@ -502,7 +648,7 @@ export default function CaseDetail() {
                   className="px-3 py-1.5 rounded-xl bg-[#111c33] hover:bg-[#192848] border border-[#21355e] text-xs font-medium text-slate-200 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Atașează Document</span>
+                  <span>Atașează Document Nou</span>
                 </button>
               )}
             </div>
@@ -558,7 +704,7 @@ export default function CaseDetail() {
                   })}
                 </div>
 
-                {/* Inline Document Inspector with Line Highlighting */}
+                {/* Inline Document Inspector with Line Numbers */}
                 <div className={`${isSplitDesktop ? '' : 'lg:col-span-7'} p-4 sm:p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
                   {selectedDoc ? (
                     <>
@@ -573,50 +719,61 @@ export default function CaseDetail() {
                             </h3>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
-                            Tip document: {selectedDoc.document_type} • Conținut numerotat pe rânduri
+                            Tip document: {selectedDoc.document_type} • Format conform cerințelor de arhivare bancară
                           </p>
                         </div>
                         {highlightedLine && (
                           <span className="px-3 py-1 rounded-lg bg-amber-400/20 border border-amber-400 text-amber-300 text-xs font-bold animate-pulse">
-                            Rândul {highlightedLine} evidențiat din citarea AI
+                            Rândul {highlightedLine} evidențiat
                           </span>
                         )}
                       </div>
 
-                      <div className="rounded-xl bg-[#050811] border border-[#182642] p-3 font-mono text-xs sm:text-sm space-y-1.5 max-h-[460px] overflow-y-auto">
-                        {(selectedDoc.content_text || '').split('\n').map((line, index) => {
-                          const lineNum = index + 1;
-                          const isHighlighted = highlightedLine === lineNum;
-                          return (
-                            <div
-                              id={`doc-line-${lineNum}`}
-                              key={lineNum}
-                              onClick={() => setHighlightedLine(lineNum === highlightedLine ? null : lineNum)}
-                              className={`px-3 py-2 rounded-lg flex items-start gap-3 cursor-pointer transition-colors ${
-                                isHighlighted
-                                  ? 'bg-amber-400/25 border-2 border-amber-400 text-amber-100 font-bold shadow-md'
-                                  : 'hover:bg-[#0d162b] text-slate-200'
-                              }`}
-                            >
-                              <span className="text-slate-500 select-none w-6 text-right shrink-0">
-                                {lineNum}
-                              </span>
-                              <span className="flex-1 break-words">{line}</span>
-                            </div>
-                          );
-                        })}
+                      {/* Document Content with numbered lines */}
+                      <div className="bg-[#050811] border border-[#142036] rounded-xl p-4 font-mono text-xs text-slate-300 overflow-x-auto max-h-[500px] overflow-y-auto space-y-1">
+                        {selectedDoc.content_text ? (
+                          selectedDoc.content_text.split('\n').map((line, idx) => {
+                            const lineNum = idx + 1;
+                            const isHighlighted = highlightedLine === lineNum;
+                            return (
+                              <div
+                                key={idx}
+                                id={`doc-line-${lineNum}`}
+                                className={`py-1 px-2.5 rounded transition-colors flex items-start gap-3 ${
+                                  isHighlighted
+                                    ? 'bg-amber-400/25 text-amber-200 border-l-4 border-amber-400 font-semibold'
+                                    : 'hover:bg-slate-800/40 text-slate-300'
+                                }`}
+                              >
+                                <span className="text-slate-600 select-none w-7 text-right shrink-0">
+                                  {lineNum}
+                                </span>
+                                <span className="break-all whitespace-pre-wrap">{line}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-slate-500 py-8 text-center">
+                            Conținutul documentului nu a putut fi extras text sau fișierul este imagine scanată.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 flex justify-between items-center pt-2 border-t border-[#142036]">
+                        <span>Stocare securizată conform politicii de conformitate BNR</span>
+                        <span>MIME: {selectedDoc.mime_type || 'application/pdf'}</span>
                       </div>
                     </>
                   ) : (
-                    <div className="p-12 text-center text-slate-500 text-sm">
-                      Selectează un document pentru a inspecta conținutul.
+                    <div className="p-12 text-center text-slate-500">
+                      Selectează un document din stânga pentru a-l vizualiza.
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* TAB 2: FIȘA DE VERIFICARE MANUALĂ A OFIȚERULUI */}
+            {/* TAB 2: FIȘĂ DE VERIFICARE MANUALĂ (DATA ENTRY & WORKFLOW OFIȚER) */}
             {activeTab === 'fisa_verificare' && (
               <form
                 onSubmit={handleSaveManualForm}
@@ -624,10 +781,10 @@ export default function CaseDetail() {
               >
                 <div className="border-b border-[#142036] pb-3">
                   <h3 className="text-base font-bold text-white">
-                    Fișa Internă de Verificare și Eligibilitate (Flux Manual Ofițer)
+                    Fișa Internă de Verificare și Introducere Date (Underwriting Manual)
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    În fluxul clasic fără AI, ofițerul citește fiecare PDF și introduce/corectează manual aceste câmpuri (~45 min/dosar). Cu Raiffeisen AI Copilot, valorile validate se aplică cu un singur click.
+                    Ofițerul bancar verifică concordanța documentelor depuse de client cu datele din sistemul central și confirmă valorile finale pentru aprobare.
                   </p>
                 </div>
 
@@ -707,7 +864,7 @@ export default function CaseDetail() {
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Note Verificare Ofițer</label>
+                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Note Verificare & Analiză Risc</label>
                   <textarea
                     rows="3"
                     value={formNotes}
@@ -723,13 +880,95 @@ export default function CaseDetail() {
                     className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{savingForm ? 'Se salvează...' : 'Salvează Datele în Dosar'}</span>
+                    <span>{savingForm ? 'Se salvează...' : 'Salvează Modificările în Sistem'}</span>
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 3: SARCINI */}
+            {/* TAB 3: RAPORT BIROUL DE CREDIT (CRB) */}
+            {activeTab === 'birou_credit' && (
+              <div className="p-5 sm:p-6 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-emerald-400" />
+                      <span>Fișă Interogare — Biroul de Credit S.A.</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Cod interogare: BC-2026-9921 • Data interogării: {new Date(caseData.created_at).toLocaleDateString('ro-RO')}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-800 text-emerald-300 text-xs font-bold">
+                    Calificativ Risc: Foarte Scăzut
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">Scor FICO</span>
+                    <p className="text-3xl font-extrabold text-emerald-400">
+                      {caseData.client.fico_score || 715} <span className="text-xs text-slate-500 font-normal">/ 850</span>
+                    </p>
+                    <span className="text-[11px] text-slate-400 block">Probabilitate implicită de nerambursare sub 1.2%</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">Istoric Întârzieri (48 luni)</span>
+                    <p className="text-xl font-bold text-white">0 restanțe</p>
+                    <span className="text-[11px] text-emerald-400 font-medium block">
+                      {caseData.client.credit_bureau_status || 'Clasa A de performanță'}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">Contracte Active în Sistem</span>
+                    <p className="text-xl font-bold text-white">
+                      {caseData.client.credit_bureau_active_loans || 1} contract(e)
+                    </p>
+                    <span className="text-[11px] text-amber-400 font-medium block">
+                      Total rate externe: {caseData.client.existing_monthly_debts || 200} RON / lună
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Sinteză Credite Active la Alte Instituții Bancare
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-[#142036]">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-[#050811] text-slate-400 border-b border-[#142036]">
+                        <tr>
+                          <th className="py-2.5 px-3 font-medium">Bancă Creditoare</th>
+                          <th className="py-2.5 px-3 font-medium">Tip Produs</th>
+                          <th className="py-2.5 px-3 font-medium">Limită / Sold</th>
+                          <th className="py-2.5 px-3 font-medium">Rată Lunară</th>
+                          <th className="py-2.5 px-3 font-medium">Status Plăți</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#142036] bg-[#070d1c]">
+                        <tr>
+                          <td className="py-2.5 px-3 font-medium text-white">Banca Parteneră S.A.</td>
+                          <td className="py-2.5 px-3">Card de Credit</td>
+                          <td className="py-2.5 px-3">5.000 RON</td>
+                          <td className="py-2.5 px-3 font-semibold text-amber-300">
+                            {caseData.client.existing_monthly_debts || 200} RON
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400">
+                              La zi (0 zile întârziere)
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: SARCINI OPERAȚIONALE OFIȚER */}
             {activeTab === 'sarcini' && (
               <div className="space-y-3">
                 {caseData.tasks.length === 0 ? (
@@ -775,7 +1014,7 @@ export default function CaseDetail() {
               </div>
             )}
 
-            {/* TAB 4: ISTORIC / AUDIT TRAIL */}
+            {/* TAB 5: JURNAL DE AUDIT & ISTORIC BANCAR */}
             {activeTab === 'istoric' && (
               <div className="space-y-3">
                 {caseData.history_entries.map((log) => (
@@ -801,9 +1040,46 @@ export default function CaseDetail() {
               </div>
             )}
           </div>
+
+          {/* OFFICIAL OFFICER DECISION PANEL (HUMAN-IN-THE-LOOP) */}
+          <div className="p-5 rounded-2xl bg-[#070c18] border border-[#182640] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+            <div>
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-blue-400" />
+                <span>Panou Decizie Ofițer de Credite (Comitet Retail)</span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Validează conformitatea dosarului și emite decizia bancară oficială.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('respins', 'Dosar respins de către ofițerul de credit')}
+                className="px-4 py-2 rounded-xl bg-red-950/50 hover:bg-red-900/60 border border-red-800 text-red-300 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+              >
+                Respinge Dosarul
+              </button>
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('in_asteptare', 'Solicitare clarificări / documente suplimentare de la client')}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+              >
+                Solicită Clarificări
+              </button>
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('complet', 'Dosar aprobat conform normelor de creditare Retail')}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+              >
+                Aprobă Dosarul (Emitere Contract)
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* RIGHT PANE (WHEN IN SPLIT MODE): RAIFFEISEN AI COPILOT */}
+        {/* RIGHT PANE (WHEN IN SPLIT MODE): RAIFFEISEN AI COPILOT EXTENSION */}
         {isCopilotOpen && copilotViewMode === 'split' && (
           <div ref={copilotContainerRef} className="xl:col-span-6 w-full min-w-0 xl:sticky xl:top-[84px]">
             <AICopilotDrawer
@@ -826,7 +1102,7 @@ export default function CaseDetail() {
           <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-semibold text-white">Atașează Document Nou la Dosar #{caseData.case_number}</h3>
-              <button onClick={() => setShowDocModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowDocModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -838,7 +1114,7 @@ export default function CaseDetail() {
                   required
                   value={newDocName}
                   onChange={(e) => setNewDocName(e.target.value)}
-                  placeholder="ex: Adeverinta_Rectificata.pdf"
+                  placeholder="ex: Adeverinta_Venit_Rectificata.pdf"
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-white"
                 />
               </div>
@@ -854,16 +1130,17 @@ export default function CaseDetail() {
                   <option value="Extras financiar">Extras financiar</option>
                   <option value="Copie CI">Copie CI</option>
                   <option value="Factură utilități">Factură utilități</option>
+                  <option value="Raport Biroul de Credit">Raport Biroul de Credit</option>
                 </select>
               </div>
               <div>
-                <label className="block text-slate-300 mb-1">Conținut text (OCR / Demo)</label>
+                <label className="block text-slate-300 mb-1">Conținut text document</label>
                 <textarea
                   rows="5"
                   required
                   value={newDocContent}
                   onChange={(e) => setNewDocContent(e.target.value)}
-                  placeholder={"Rândul 1: ADEVERINȚĂ RECTIFICATĂ\nRândul 2: Nume și prenume solicitant: Ion Popescu\nRândul 3: Venit lunar net: 5.700 RON"}
+                  placeholder={"Rândul 1: DOCUMENT OFICIAL\nRândul 2: Titular: ...\nRândul 3: Valori confirmate: ..."}
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl p-3 text-white font-mono"
                 />
               </div>
@@ -871,13 +1148,13 @@ export default function CaseDetail() {
                 <button
                   type="button"
                   onClick={() => setShowDocModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 cursor-pointer"
                 >
                   Anulează
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer"
                 >
                   Încarcă în Dosar
                 </button>

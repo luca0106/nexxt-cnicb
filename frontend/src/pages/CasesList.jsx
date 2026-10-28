@@ -204,9 +204,14 @@ export default function CasesList() {
                   </h3>
                   <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-400">
                     {c.client && (
-                      <span className="flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="flex items-center gap-1.5 text-slate-200">
+                        <User className="w-3.5 h-3.5 text-blue-400" />
                         {c.client.full_name}
+                      </span>
+                    )}
+                    {c.branch && (
+                      <span className="text-slate-400">
+                        {c.branch}
                       </span>
                     )}
                     {c.requested_amount && (
