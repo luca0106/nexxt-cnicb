@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, String, Float, Text, DateTime, ForeignKe
 from sqlalchemy.orm import relationship
 from .database import Base
 
+
 class Client(Base):
     __tablename__ = "clients"
 
@@ -14,6 +15,9 @@ class Client(Base):
     address = Column(String(250), nullable=True)
     employer = Column(String(150), nullable=True)
     monthly_income = Column(Float, default=0.0)
+    existing_monthly_debts = Column(Float, default=0.0)
+    id_card_series = Column(String(20), nullable=True)
+    id_card_expiry = Column(String(30), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     cases = relationship("Case", back_populates="client", cascade="all, delete-orphan")
@@ -31,8 +35,11 @@ class Case(Base):
     priority = Column(String(50), default="normal")  # normal, ridicat, urgent
     assigned_to = Column(String(100), default="Consultant 024")
     requested_amount = Column(Float, nullable=True)
+    loan_term_months = Column(Integer, default=60)
+    interest_rate_annual = Column(Float, default=8.9)
     currency = Column(String(10), default="RON")
     notes = Column(Text, nullable=True)
+    scenario_tag = Column(String(100), nullable=True)  # discrepancy_case, expired_id_case, valid_green_case
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -41,6 +48,7 @@ class Case(Base):
     documents = relationship("Document", back_populates="case", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="case", cascade="all, delete-orphan")
     history_entries = relationship("AuditLog", back_populates="case", cascade="all, delete-orphan")
+    ai_analyses = relationship("AIAnalysis", back_populates="case", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -48,12 +56,14 @@ class Document(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("cases.id"), nullable=False)
+    doc_code = Column(String(50), nullable=True)  # doc-1, doc-2, doc-3, doc-4
     file_name = Column(String(200), nullable=False)
-    document_type = Column(String(100), nullable=False)  # Formular cerere, Adeverință venit, Extras de cont, Copie CI
+    document_type = Column(String(100), nullable=False)  # Formular cerere, Adeverință venit, Extras financiar, Copie CI, Factură utilități
     file_size_kb = Column(Integer, default=120)
     mime_type = Column(String(50), default="application/pdf")
-    content_text = Column(Text, nullable=True)  # Realistic text payload ready for future AI verification
-    status = Column(String(50), default="uploaded")  # uploaded, verified, flagged
+    page_count = Column(Integer, default=1)
+    content_text = Column(Text, nullable=True)
+    status = Column(String(50), default="uploaded")  # uploaded, verified, flagged, expired
     created_at = Column(DateTime, default=datetime.utcnow)
 
     case = relationship("Case", back_populates="documents")
@@ -86,3 +96,31 @@ class AuditLog(Base):
 
     case = relationship("Case", back_populates="history_entries")
 
+
+class AIAnalysis(Base):
+    __tablename__ = "ai_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_uid = Column(String(100), unique=True, index=True, nullable=False)
+    case_id = Column(Integer, ForeignKey("cases.id"), nullable=False, index=True)
+    status = Column(String(50), default="completed")  # queued, running, completed, failed
+    engine_used = Column(String(100), default="Raiffeisen Hybrid Multi-Agent Engine v2.4")
+    summary = Column(Text, nullable=True)
+    risk_score = Column(String(50), default="mediu")  # scazut, mediu, ridicat, critic
+    human_decision = Column(String(50), default="pending")  # pending, approved, clarification_sent, rejected
+
+    # JSON serialized payloads from agents
+    pii_masking_json = Column(Text, nullable=True)
+    extracted_fields_json = Column(Text, nullable=True)
+    policy_rules_json = Column(Text, nullable=True)
+    findings_json = Column(Text, nullable=True)
+    feasibility_math_json = Column(Text, nullable=True)
+    remediation_json = Column(Text, nullable=True)
+    workflow_checklist_json = Column(Text, nullable=True)
+    execution_trace_json = Column(Text, nullable=True)
+    metrics_json = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, default=datetime.utcnow)
+
+    case = relationship("Case", back_populates="ai_analyses")

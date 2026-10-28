@@ -6,9 +6,10 @@ from datetime import datetime
 
 from ..database import get_db
 from ..models import Case, Client, Document, Task, AuditLog
-from ..schemas import CaseListOut, CaseDetailOut, CaseCreate, CaseStatusUpdate
+from ..schemas import CaseListOut, CaseDetailOut, CaseCreate, CaseStatusUpdate, CaseManualFormUpdate
 
 router = APIRouter(prefix="/cases", tags=["Dosare"])
+
 
 @router.get("", response_model=List[CaseListOut])
 def get_cases(
@@ -34,7 +35,6 @@ def get_cases(
             )
         )
 
-    # Order by specific priority or recent
     cases = query.order_by(Case.created_at.desc()).offset(offset).limit(limit).all()
 
     result = []
@@ -50,24 +50,29 @@ def get_cases(
                 priority=c.priority,
                 assigned_to=c.assigned_to,
                 requested_amount=c.requested_amount,
+                loan_term_months=c.loan_term_months,
+                interest_rate_annual=c.interest_rate_annual,
                 currency=c.currency,
+                scenario_tag=c.scenario_tag,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
                 client=c.client,
-                documents_count=len(c.documents)
+                documents_count=len(c.documents),
+                has_ai_analysis=len(c.ai_analyses) > 0
             )
         )
     return result
+
 
 @router.get("/{case_id}", response_model=CaseDetailOut)
 def get_case(case_id: int, db: Session = Depends(get_db)):
     c = db.query(Case).filter(Case.id == case_id).first()
     if not c:
-        # Try search by case_number if not found by primary key
         c = db.query(Case).filter(Case.case_number == str(case_id)).first()
     if not c:
         raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
     return c
+
 
 @router.post("", response_model=CaseDetailOut)
 def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
@@ -75,7 +80,6 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=400, detail="Clientul specificat nu există.")
 
-    # Generate case number if not provided
     if not payload.case_number:
         last_case = db.query(Case).order_by(Case.id.desc()).first()
         new_num = (int(last_case.case_number) + 1) if last_case and last_case.case_number.isdigit() else 10500
@@ -92,8 +96,11 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
         priority=payload.priority or "normal",
         assigned_to=payload.assigned_to or "Consultant 024",
         requested_amount=payload.requested_amount,
+        loan_term_months=payload.loan_term_months or 60,
+        interest_rate_annual=payload.interest_rate_annual or 8.9,
         currency=payload.currency or "RON",
         notes=payload.notes,
+        scenario_tag=payload.scenario_tag or "standard_case",
         client_id=client.id,
         created_at=datetime.utcnow()
     )
@@ -101,7 +108,6 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_case)
 
-    # Add audit log entry
     log = AuditLog(
         case_id=new_case.id,
         action="Creare dosar",
@@ -112,6 +118,7 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
     db.commit()
 
     return new_case
+
 
 @router.patch("/{case_id}/status", response_model=CaseDetailOut)
 def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = Depends(get_db)):
@@ -127,7 +134,6 @@ def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = De
         c.notes = f"{c.notes}\n[{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}] {payload.notes}" if c.notes else payload.notes
     c.updated_at = datetime.utcnow()
 
-    # Log action
     log = AuditLog(
         case_id=c.id,
         action="Actualizare status",
@@ -139,3 +145,49 @@ def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = De
     db.refresh(c)
     return c
 
+
+@router.patch("/{case_id}/manual-form", response_model=CaseDetailOut)
+def update_case_manual_form(case_id: int, payload: CaseManualFormUpdate, db: Session = Depends(get_db)):
+    """
+    Allows the bank officer to manually edit/save fields in the BankDesk case form
+    (Data Entry & Verification).
+    """
+    c = db.query(Case).filter(Case.id == case_id).first()
+    if not c:
+        c = db.query(Case).filter(Case.case_number == str(case_id)).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
+
+    if c.client:
+        if payload.full_name is not None:
+            c.client.full_name = payload.full_name
+        if payload.cnp is not None:
+            c.client.cnp = payload.cnp
+        if payload.address is not None:
+            c.client.address = payload.address
+        if payload.employer is not None:
+            c.client.employer = payload.employer
+        if payload.monthly_income is not None:
+            c.client.monthly_income = payload.monthly_income
+        if payload.existing_monthly_debts is not None:
+            c.client.existing_monthly_debts = payload.existing_monthly_debts
+
+    if payload.requested_amount is not None:
+        c.requested_amount = payload.requested_amount
+    if payload.loan_term_months is not None:
+        c.loan_term_months = payload.loan_term_months
+    if payload.notes is not None:
+        c.notes = payload.notes
+
+    c.updated_at = datetime.utcnow()
+
+    log = AuditLog(
+        case_id=c.id,
+        action="Actualizare Formular Verificare Dosar",
+        performed_by="Consultant 024",
+        details=f"Datele dosarului #{c.case_number} au fost actualizate în fișa de lucru."
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(c)
+    return c

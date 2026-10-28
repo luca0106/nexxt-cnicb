@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from typing import List
 from ..database import get_db
 from ..models import Case
 from ..schemas import DashboardStats, CaseListOut
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
 
 @router.get("/stats", response_model=DashboardStats)
 def get_dashboard_stats(db: Session = Depends(get_db)):
@@ -16,11 +15,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     in_asteptare = db.query(Case).filter(Case.status == "in_asteptare").count()
     total = db.query(Case).count()
 
-    # Get recent cases matching the order in the screenshot first:
-    # 10482 (Cerere de credit - În verificare)
-    # 10479 (Actualizare date client - Complet)
-    # 10475 (Deschidere cont - În așteptare)
-    # followed by the rest
     pinned_numbers = ["10482", "10479", "10475"]
     pinned_cases = db.query(Case).filter(Case.case_number.in_(pinned_numbers)).all()
     pinned_dict = {c.case_number: c for c in pinned_cases}
@@ -30,7 +24,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         if num in pinned_dict:
             ordered_recent.append(pinned_dict[num])
 
-    # Add other recent ones if fewer than 5
     if len(ordered_recent) < 5:
         others = (
             db.query(Case)
@@ -41,7 +34,6 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         )
         ordered_recent.extend(others)
 
-    # Convert to response
     result_cases = []
     for c in ordered_recent:
         result_cases.append(
@@ -55,11 +47,15 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 priority=c.priority,
                 assigned_to=c.assigned_to,
                 requested_amount=c.requested_amount,
+                loan_term_months=c.loan_term_months,
+                interest_rate_annual=c.interest_rate_annual,
                 currency=c.currency,
+                scenario_tag=c.scenario_tag,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
                 client=c.client,
-                documents_count=len(c.documents)
+                documents_count=len(c.documents),
+                has_ai_analysis=len(c.ai_analyses) > 0
             )
         )
 
@@ -71,4 +67,3 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         total_dosare=total,
         recent_cases=result_cases
     )
-

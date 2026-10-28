@@ -33,6 +33,16 @@ export async function updateCaseStatus(id, status, notes = '') {
   return res.json();
 }
 
+export async function updateCaseManualForm(id, data) {
+  const res = await fetch(`${API_BASE}/cases/${id}/manual-form`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Nu s-a putut salva formularul de verificare');
+  return res.json();
+}
+
 export async function createCase(data) {
   const res = await fetch(`${API_BASE}/cases`, {
     method: 'POST',
@@ -67,6 +77,16 @@ export async function fetchDocuments(caseId = null) {
   return res.json();
 }
 
+export async function createDocument(data) {
+  const res = await fetch(`${API_BASE}/documents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Nu s-a putut încărca documentul');
+  return res.json();
+}
+
 export async function fetchTasks(caseId = null) {
   const url = caseId ? `${API_BASE}/tasks?case_id=${caseId}` : `${API_BASE}/tasks`;
   const res = await fetch(url);
@@ -89,3 +109,52 @@ export async function fetchHistory(caseId = null) {
   return res.json();
 }
 
+// =========================================================
+// RAIFFEISEN AI COPILOT (MULTI-AGENT EXTENSION) API CALLS
+// =========================================================
+
+export async function runCaseAnalysis(caseId, options = {}) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!res.ok) throw new Error('Eroare la rularea analizei AI multi-agent');
+  return res.json();
+}
+
+export async function fetchLatestCaseAnalysis(caseId) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/analysis`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function resolveFinding(analysisId, findingId, payload) {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/findings/${findingId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Nu s-a putut actualiza constatarea');
+  return res.json();
+}
+
+export async function sendRemediationNotification(analysisId, payload = {}) {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/remediation/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Eroare la trimiterea notificării de remediere');
+  return res.json();
+}
+
+export async function submitHumanDecision(analysisId, payload) {
+  const res = await fetch(`${API_BASE}/analyses/${analysisId}/human-decision`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Eroare la înregistrarea deciziei ofițerului');
+  return res.json();
+}

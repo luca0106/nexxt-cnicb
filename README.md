@@ -1,122 +1,69 @@
-# BankDesk — Sistem Intern de Gestionare a Clienților și Dosarelor
+# BankDesk & Raiffeisen AI Copilot — Triage & Audit
 
-Aplicație fullstack enterprise (Backend, Frontend, Bază de Date PostgreSQL, Docker) construită pe baza machetei BankDesk și a specificațiilor de proiect Raiffeisen Bank — Operational Efficiency.
+Aplicație fullstack (Backend FastAPI, Frontend React + Tailwind CSS, Bază de Date PostgreSQL/SQLite, Docker) construită pentru **Raiffeisen Bank Hackathon — Operational Efficiency**.
 
-![BankDesk Screenshot Overview](frontend/public/preview.png)
-
----
-
-## 🏛️ Descriere Proiect
-
-**BankDesk** este o platformă web internă utilizată de angajații băncii (ex. *Consultant 024*) pentru:
-- Monitorizarea activității din departament (*Dosare în lucru*, *De verificat*);
-- Gestionarea dosarelor de creditare și actualizare date clienți;
-- Consultarea documentelor justificative atașate (cereri, adeverințe de venit, extrase de cont, cărți de identitate);
-- Urmărirea sarcinilor operaționale și a istoricului complet (audit trail).
-
-> **Notă:** Această versiune reprezintă **aplicația de bază**, decuplată de AI. Structura de date, endpoint-urile API și documentele demonstrative au fost special pregătite pentru a permite conectarea ulterioară a plugin-ului multi-agentic AI descris în documentul tehnic (BankDesk AI).
+Proiectul îmbină:
+1. **Aplicația-gazdă `BankDesk`**: Sistemul bancar intern în care lucrează ofițerul de credite (*Consultant 024*) — Dashboard identic cu macheta oficială, gestiune clienți, fișă de verificare manuală (Data Entry), vizualizator de documente numerotat pe rânduri, sarcini și jurnal de audit.
+2. **Extensia Multi-Agentică `Raiffeisen AI Copilot (Triage & Audit)`**: Un panou lateral (Drawer stil extensie de browser) care se deschide peste pagina oricărui dosar din `BankDesk`, orchestrând o echipă de agenți AI în cascadă și în paralel pentru a reduce timpul de verificare a unui dosar de la **45 de minute la ~3 secunde**.
 
 ---
 
-## 🚀 Arhitectură Tehnică
+## 🤖 Arhitectura Multi-Agentică (Raiffeisen AI Copilot)
 
-- **Frontend**: React 18, Vite, Tailwind CSS, Lucide Icons, React Router 6. Design dark-mode fidel machetei din captură.
-- **Backend**: Python 3.13 + FastAPI, SQLAlchemy 2.0, Pydantic v2.
-- **Bază de date**: PostgreSQL 16 (cu fallback automat pe SQLite pentru rulare locală rapidă fără server extern).
-- **Containerizare**: Docker & Docker Compose (servicii: `postgres`, `backend`, `frontend` cu Nginx reverse proxy).
+Când ofițerul de credite deschide un dosar și apasă **„Run AI Review”** în extensia Copilot, orchestratorul (`backend/app/agents/orchestrator.py`) execută următoarele etape:
 
----
-
-## 📁 Structura Proiectului
-
-```text
-├── docker-compose.yml           # Configurația celor 3 servicii (DB, API, Web)
-├── README.md
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app/
-│       ├── main.py              # Inițializare FastAPI, CORS, rute
-│       ├── config.py            # Variabile mediu & setări
-│       ├── database.py          # Conexiune SQLAlchemy
-│       ├── models.py            # Modele DB: Client, Case, Document, Task, AuditLog
-│       ├── schemas.py           # Validări și DTOs Pydantic
-│       ├── seed.py              # Date demonstrative pre-populate (matching mockup)
-│       └── routers/             # Endpoint-uri REST
-│           ├── dashboard.py     # Statistici (24 în lucru, 7 de verificat, etc.)
-│           ├── cases.py         # CRUD dosare & actualizare status
-│           ├── clients.py       # Gestiune clienți bancari
-│           ├── documents.py     # Documente atașate dosarelor
-│           ├── tasks.py         # Sarcini de verificare
-│           └── history.py       # Audit trail / jurnal acțiuni
-└── frontend/
-    ├── Dockerfile
-    ├── nginx.conf               # Nginx reverse proxy pentru /api/ și SPA
-    ├── package.json
-    ├── vite.config.js
-    ├── tailwind.config.js
-    ├── index.html
-    └── src/
-        ├── api/client.js        # Serviciu apeluri API
-        ├── components/          # Header, Sidebar, Layout general
-        └── pages/
-            ├── Dashboard.jsx    # Ecranul principal din captură
-            ├── CasesList.jsx    # Centralizator dosare & filtrare
-            ├── CaseDetail.jsx   # Detalii dosar, documente, sarcini, istoric
-            ├── ClientsList.jsx  # Registru clienți
-            ├── DocumentsList.jsx# Vizualizator documente
-            ├── TasksList.jsx    # To-do operațional
-            └── HistoryList.jsx  # Jurnal activități
-```
+1. **Scutul de Anonimizare PII (`PII Anonymization Shield — GDPR`)**:
+   - Pseudonimizează datele cu caracter personal (`CNP`, `Serie/Nr. CI`, `IBAN`, `Telefon`, `Email`) înainte de analiza LLM și le re-hidratează exclusiv în interfața securizată a ofițerului bancar.
+2. **Execuție în Paralel (`Extractor Agent` $\parallel$ `Policy Agent`)**:
+   - **Agentul 1 — Extractor (OCR & Data Structuring)**: Citește documentele atașate și extrage câmpurile într-o schemă JSON strictă, reținând **documentul-sursă, numărul exact al rândului (`Rândul X`) și citatul exact**.
+   - **Agentul 2A — Policy Agent (Norme BNR & Proceduri Interne)**: Caută în setul de proceduri bancare regulile aplicabile (`PROC-KYC-01`, `PROC-DOC-02`, `PROC-INC-03`, `NORMA-BNR-DTI-04`).
+3. **Agentul 2B — Investigator (Cross-Checker) + Motor Matematic Determinist Python**:
+   - **Cross-Checking cu Explicabilitate 100% (Audit Trail)**: Compară datele între documente și generează **Red Flags** (alerte/discrepanțe) și **Green Flags** (validări). Fiecare constatare are citări clickabile care evidențiază rândul exact în documentul din stânga.
+   - **Calcul Matematic Separat în Python (`calculate_feasibility_math`)**: Rata lunară (formula anuității) și **Gradul de Îndatorare (plafon maxim 40% BNR)** sunt calculate 100% determinist în Python standard, eliminând riscul de halucinație al LLM-urilor pe calcule financiare.
+4. **Agentul 3 — Agentul de Remedieri & Workflow (`Automation & Human-in-the-Loop`)**:
+   - În cazul unor blocaje critice (ex: *Carte de Identitate expirată* sau discrepanțe între acte), formulează și trimite automat un **SMS și Email către client** cu un link securizat de reîncărcare.
+   - Pregătește **Checklist-ul final pentru ofițer (Human-in-the-Loop)**: AI-ul nu ia decizii bancare finale, ci pregătește dosarul, iar ofițerul confirmă constatările, selectează valoarea validată (cu recalculare instantanee a DTI-ului) și apasă *Aprobă*, *Solicită Clarificări* sau *Respinge*.
 
 ---
 
-## ⚡ Pornire Rapidă cu Docker Compose
+## 🎯 Cele 3 Scenarii de Demo Pre-configurate (Pe Dashboard)
 
-Asigurați-vă că aveți Docker Desktop pornit, apoi rulați din rădăcina proiectului:
+| Dosar | Titlu & Status | Scenariu Demonstrativ pentru Juriu |
+| :--- | :--- | :--- |
+| **Dosar #10482** | *Cerere de credit* (`În verificare`) | **Scenariul 1 — Discrepanțe Cross-Check**:<br>• **Venit diferit**: `5.200 RON` în Cererea de credit (*Rândul 8*) vs `5.700 RON` în Adeverința de venit (*Rândul 9*) și Extrasul de cont (*Rândul 8*).<br>• **Nume diferit**: `Ion Popescu` în CI (*Rândul 4*) vs `Ioan Popescu` în Adeverința de venit (*Rândul 4*).<br>• Ofițerul poate da click pe citate pentru evidențierea rândului în document și poate selecta valoarea validată (`5.700 RON`), recalculând instantaneu DTI-ul în Python (`17.92%` $\rightarrow$ `16.35%`). |
+| **Dosar #10475** | *Deschidere cont* (`În așteptare`) | **Scenariul 2 — Edge Case Critică (Buletin Expirat)**:<br>• Cartea de identitate atașată a expirat la `10.02.2026` (*Rândul 7*), iar adresa de pe factura de utilități diferă de cea din CI.<br>• **Agentul de Remedieri** intervine automat la triaj și generează **SMS + Email cu link securizat de reîncărcare** către clientul *Mihai Dumitrescu*. |
+| **Dosar #10479** | *Actualizare date client* (`Complet`) | **Scenariul 3 — Dosar 100% Valid (Green Flags)**:<br>• Toate documentele corespund 100% (*Elena Radu*, venit `6.800 RON`, CI valabil, DTI `17.83%` < `40%` BNR), gata de aprobare rapidă. |
 
+---
+
+## ⚡ Pornire Rapidă
+
+### Varianta A — Cu Docker Compose
 ```bash
 docker compose up --build
 ```
+- **Frontend Web**: [http://localhost:3001](http://localhost:3001)
+- **Backend API & Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-Aplicația va fi accesibilă la:
-- **Frontend Web**: [http://localhost:3001](http://localhost:3001) (sau portul configurat în `FRONTEND_PORT`)
-- **Backend API Docs (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Baza de date Postgres**: `localhost:5432` (user: `bankuser`, pass: `bankpassword`, db: `bankdesk`)
-
-La prima pornire, baza de date se populează automat cu datele din mockup:
-- **Dosar #10482** (*Cerere de credit*, status: `În verificare`, solicitant *Alexandru Ionescu*, documente conținând discrepanța de venit 5.200 vs 5.700 RON);
-- **Dosar #10479** (*Actualizare date client*, status: `Complet`);
-- **Dosar #10475** (*Deschidere cont*, status: `În așteptare`);
-- Statistici exacte: **24 în lucru**, **7 de verificat**.
-
----
-
-## 💻 Rulare Locală (Fără Docker)
-
-Dacă doriți să dezvoltați sau să rulați direct pe mașina locală:
-
-### 1. Pornire Backend
-```bash
-cd backend
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-*(Backend-ul folosește automat SQLite local `bankdesk.db` dacă PostgreSQL nu este configurat în variabila `DATABASE_URL`)*.
-
-### 2. Pornire Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Frontend-ul va porni la [http://localhost:5173](http://localhost:5173) și se va conecta automat prin proxy la backend-ul de pe portul 8000.
+### Varianta B — Rulare Locală Directă (Development)
+1. **Pornire Backend (FastAPI)**:
+   ```bash
+   cd backend
+   python -m uvicorn app.main:app --reload --port 8000
+   ```
+2. **Pornire Frontend (Vite + React)**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+   Aplicația va fi disponibilă la [http://localhost:5173](http://localhost:5173).
 
 ---
 
-## 🔮 Conectarea Viitoare a Plugin-ului Multi-Agentic AI
+## 🔌 Contract API Multi-Agent (Conform Specificației PDF)
 
-Această aplicație a fost structurată special pentru a servi drept fundație solidă pentru pasul următor descris în documentul tehnic:
-1. **Pagină de detalii dosar** gata prevăzută cu container pentru declanșarea analizei de verificare;
-2. **Text extras din documente** stocat direct pe modelele de documente (`Document.content_text`), conținând exact cazul de test propus (Cerere credit: 5.200 RON vs Adeverință angajator: 5.700 RON);
-3. **Endpoint-uri decuplate** gata de a apela serviciul de agenți (Extraction Agent, Policy Agent, Verification Agent, Workflow Agent).
+- `POST /api/cases/{caseId}/analysis` — Pornește orchestratorul multi-agentic pe documentele dosarului.
+- `GET /api/analyses/{analysisId}` — Returnează raportul complet (`findings`, `feasibilityMath`, `remediation`, `piiMasking`, `executionTrace`).
+- `PATCH /api/analyses/{analysisId}/findings/{findingId}` — Revizuire umană pe constatare (confirmare sau selectarea valorii corecte cu recalculare automată DTI în Python).
+- `POST /api/analyses/{analysisId}/remediation/send` — Trimite notificarea automată SMS & Email cu link securizat către client.
+- `POST /api/analyses/{analysisId}/human-decision` — Înregistrează decizia finală a ofițerului (*Approve*, *Request Clarification*, *Reject*) în Audit Trail.
