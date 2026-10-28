@@ -1,5 +1,8 @@
 # BankDesk & Raiffeisen AI Copilot — Triage & Audit
 
+Project documentation: [agent instructions](AGENTS.md), [current progress](PROGRESS.md),
+[next steps](TODO.md), [architecture](ARCHITECTURE.md).
+
 A fullstack application (FastAPI backend, React + Tailwind CSS frontend, PostgreSQL / SQLite database, Docker compose) built for the **Raiffeisen Bank Hackathon — Operational Efficiency Challenge**.
 
 The project unites:
