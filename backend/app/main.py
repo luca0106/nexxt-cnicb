@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="BankDesk & Raiffeisen AI Copilot API",
     version="2.4.0",
-    description="BankDesk (Sistem intern de gestionare a clienților și dosarelor) + Raiffeisen AI Copilot (Multi-Agent Triage & Audit Extension)",
+    description="BankDesk (Internal Client & Case Management Platform) + Raiffeisen AI Copilot (Multi-Agent Underwriting Triage & Audit Extension)",
     lifespan=lifespan
 )
 

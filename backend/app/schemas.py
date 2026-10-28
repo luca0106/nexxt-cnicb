@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 # Client schemas
 class ClientBase(BaseModel):
     full_name: str
-    cnp: str
+    national_id: str
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -17,18 +17,18 @@ class ClientBase(BaseModel):
     id_card_expiry: Optional[str] = None
     id_card_issuer: Optional[str] = "SPCLEP"
     birth_date: Optional[str] = None
-    marital_status: Optional[str] = "Necăsătorit"
+    marital_status: Optional[str] = "Single"
     dependents_count: Optional[int] = 0
-    housing_status: Optional[str] = "Proprietar"
+    housing_status: Optional[str] = "Owner"
     employer_cui: Optional[str] = None
-    employment_contract_type: Optional[str] = "Perioadă nedeterminată"
-    seniority_current_employer: Optional[str] = "2 ani"
-    seniority_total: Optional[str] = "5 ani"
+    employment_contract_type: Optional[str] = "Permanent Full-Time"
+    seniority_current_employer: Optional[str] = "2 years"
+    seniority_total: Optional[str] = "5 years"
     fico_score: Optional[int] = 710
-    credit_bureau_status: Optional[str] = "Fără restanțe (Clasa A)"
+    credit_bureau_status: Optional[str] = "No Delinquencies (Class A)"
     credit_bureau_active_loans: Optional[int] = 1
-    pep_status: Optional[str] = "Nu (Negativ)"
-    aml_status: Optional[str] = "Conform L129/2019 — Fără alerte"
+    pep_status: Optional[str] = "Negative (Non-PEP)"
+    aml_status: Optional[str] = "Compliant L129/2019 — No Alerts"
     anaf_consent: Optional[bool] = True
     anaf_income: Optional[float] = None
 
@@ -69,7 +69,7 @@ class DocumentOut(DocumentBase):
 # Task schemas
 class TaskBase(BaseModel):
     title: str
-    status: Optional[str] = "in_lucru"
+    status: Optional[str] = "in_progress"
     priority: Optional[str] = "normal"
     assigned_to: Optional[str] = "Consultant 024"
     due_date: Optional[datetime] = None
@@ -103,21 +103,21 @@ class AuditLogOut(AuditLogBase):
 # Case schemas
 class CaseBase(BaseModel):
     title: str
-    case_type: Optional[str] = "Credit de Nevoi Personale"
-    status: Optional[str] = "in_lucru"
-    department: Optional[str] = "Credite Retail"
-    branch: Optional[str] = "Agenția Unirii București"
-    channel: Optional[str] = "Online Onboarding"
+    case_type: Optional[str] = "Personal Loan Application"
+    status: Optional[str] = "in_progress"
+    department: Optional[str] = "Retail Lending"
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: Optional[str] = "normal"
     assigned_to: Optional[str] = "Consultant 024"
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
-    interest_type: Optional[str] = "Fixă"
+    interest_type: Optional[str] = "Fixed"
     dae_percent: Optional[float] = 9.42
     monthly_installment: Optional[float] = 0.0
     dti_percent: Optional[float] = 0.0
-    currency: Optional[str] = "RON"
+    currency: Optional[str] = "EUR"
     notes: Optional[str] = None
     scenario_tag: Optional[str] = None
 
@@ -134,7 +134,7 @@ class CaseStatusUpdate(BaseModel):
 
 class CaseManualFormUpdate(BaseModel):
     full_name: Optional[str] = None
-    cnp: Optional[str] = None
+    national_id: Optional[str] = None
     address: Optional[str] = None
     employer: Optional[str] = None
     monthly_income: Optional[float] = None
@@ -151,14 +151,14 @@ class CaseListOut(BaseModel):
     case_type: str
     status: str
     department: str
-    branch: Optional[str] = "Agenția Unirii București"
-    channel: Optional[str] = "Online Onboarding"
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: str
     assigned_to: str
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
-    interest_type: Optional[str] = "Fixă"
+    interest_type: Optional[str] = "Fixed"
     dae_percent: Optional[float] = 9.42
     monthly_installment: Optional[float] = 0.0
     dti_percent: Optional[float] = 0.0
@@ -179,14 +179,14 @@ class CaseDetailOut(BaseModel):
     case_type: str
     status: str
     department: str
-    branch: Optional[str] = "Agenția Unirii București"
-    channel: Optional[str] = "Online Onboarding"
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: str
     assigned_to: str
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
-    interest_type: Optional[str] = "Fixă"
+    interest_type: Optional[str] = "Fixed"
     dae_percent: Optional[float] = 9.42
     monthly_installment: Optional[float] = 0.0
     dti_percent: Optional[float] = 0.0
@@ -204,21 +204,18 @@ class CaseDetailOut(BaseModel):
 
 # Dashboard statistics
 class DashboardStats(BaseModel):
-    in_lucru: int
-    de_verificat: int
-    complet: int
-    in_asteptare: int
-    total_dosare: int
+    in_progress: int
+    to_verify: int
+    completed: int
+    pending: int
+    total_cases: int
     recent_cases: List[CaseListOut]
 
 
-# =========================================================
-# AI COPILOT / MULTI-AGENT EXTENSION SCHEMAS
-# =========================================================
-
+# AI Copilot schemas
 class RunAnalysisRequest(BaseModel):
     documentIds: Optional[List[str]] = None
-    llmProvider: Optional[str] = "auto"  # auto, openai, gemini, deterministic
+    llmProvider: Optional[str] = "auto"
     apiKey: Optional[str] = None
 
 

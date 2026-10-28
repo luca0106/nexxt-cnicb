@@ -10,7 +10,7 @@ export default function ClientsList() {
 
   // Form state
   const [fullName, setFullName] = useState('');
-  const [cnp, setCnp] = useState('');
+  const [nationalId, setNationalId] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -41,7 +41,7 @@ export default function ClientsList() {
     try {
       await createClient({
         full_name: fullName,
-        cnp: cnp,
+        national_id: nationalId,
         email: email,
         phone: phone,
         address: address,
@@ -50,14 +50,14 @@ export default function ClientsList() {
       });
       setShowModal(false);
       setFullName('');
-      setCnp('');
+      setNationalId('');
       setEmail('');
       setPhone('');
       setAddress('');
       setEmployer('');
       loadData();
     } catch (err) {
-      alert('Eroare la adăugarea clientului.');
+      alert('Error registering client.');
     }
   };
 
@@ -66,10 +66,10 @@ export default function ClientsList() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Clienți Bancari
+            Bank Clients
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Baza de date a clienților înregistrați în sistemul intern
+            Registered customer directory in the internal banking system
           </p>
         </div>
         <button
@@ -77,7 +77,7 @@ export default function ClientsList() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-all shadow-lg shadow-blue-600/20 active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span>Client nou</span>
+          <span>New Client</span>
         </button>
       </div>
 
@@ -88,7 +88,7 @@ export default function ClientsList() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Caută după nume, CNP, email..."
+            placeholder="Search by name, National ID, email..."
             className="w-full bg-[#050811] border border-[#192742] rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -96,12 +96,12 @@ export default function ClientsList() {
 
       {loading ? (
         <div className="p-12 text-center text-slate-400 text-sm">
-          Se încarcă lista de clienți...
+          Loading client directory...
         </div>
       ) : clients.length === 0 ? (
         <div className="p-12 text-center rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3">
           <Users className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-slate-400 text-sm">Nu a fost găsit niciun client conform căutării.</p>
+          <p className="text-slate-400 text-sm">No clients found matching the query.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -120,7 +120,7 @@ export default function ClientsList() {
                       {c.full_name}
                     </h3>
                     <p className="text-xs text-slate-400 font-mono">
-                      CNP: {c.cnp}
+                      ID: {c.national_id || c.cnp}
                     </p>
                   </div>
                 </div>
@@ -129,20 +129,20 @@ export default function ClientsList() {
               <div className="space-y-2 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
                   <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{c.email || 'Fără email'}</span>
+                  <span className="truncate">{c.email || 'No email provided'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span>{c.phone || 'Fără telefon'}</span>
+                  <span>{c.phone || 'No phone provided'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{c.employer || 'Angajator nespecificat'}</span>
+                  <span className="truncate">{c.employer || 'Unspecified employer'}</span>
                 </div>
               </div>
 
               <div className="pt-3 border-t border-[#142036] flex items-center justify-between text-xs">
-                <span className="text-slate-400">Venit net declarat:</span>
+                <span className="text-slate-400">Declared net income:</span>
                 <span className="font-semibold text-emerald-400 font-mono">
                   {c.monthly_income?.toLocaleString()} RON
                 </span>
@@ -156,7 +156,7 @@ export default function ClientsList() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-semibold text-white">Înregistrare Client Nou</h3>
+              <h3 className="text-lg font-semibold text-white">Register New Client</h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -164,32 +164,31 @@ export default function ClientsList() {
 
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Nume complet</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Full Name</label>
                 <input
                   type="text"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="ex: Ion Popescu"
+                  placeholder="e.g. John Miller"
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">CNP (13 cifre)</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">National ID / Tax ID</label>
                   <input
                     type="text"
                     required
-                    maxLength="13"
-                    value={cnp}
-                    onChange={(e) => setCnp(e.target.value)}
+                    value={nationalId}
+                    onChange={(e) => setNationalId(e.target.value)}
                     placeholder="1890101..."
                     className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Venit lunar (RON)</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Monthly Income (RON)</label>
                   <input
                     type="number"
                     value={income}
@@ -206,12 +205,12 @@ export default function ClientsList() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="client@exemplu.ro"
+                    placeholder="client@example.com"
                     className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Telefon</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Phone</label>
                   <input
                     type="text"
                     value={phone}
@@ -223,23 +222,23 @@ export default function ClientsList() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Angajator / Companie</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Employer / Company</label>
                 <input
                   type="text"
                   value={employer}
                   onChange={(e) => setEmployer(e.target.value)}
-                  placeholder="ex: SC Soluții IT SRL"
+                  placeholder="e.g. Acme Tech Corp"
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Adresă domiciliu</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Residential Address</label>
                 <input
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Str. Exemplu nr. 1, Oraș"
+                  placeholder="e.g. 14 Elm Street, Bucharest"
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -250,13 +249,13 @@ export default function ClientsList() {
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 transition-colors"
                 >
-                  Anulează
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors"
                 >
-                  Salvează Client
+                  Save Client
                 </button>
               </div>
             </form>
@@ -266,4 +265,3 @@ export default function ClientsList() {
     </div>
   );
 }
-

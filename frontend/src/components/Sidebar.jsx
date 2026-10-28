@@ -12,11 +12,11 @@ import {
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutGrid },
-  { name: 'Clienți', path: '/clienti', icon: Users },
-  { name: 'Dosare', path: '/dosare', icon: Folder },
-  { name: 'Documente', path: '/documente', icon: FileText },
-  { name: 'Sarcini', path: '/sarcini', icon: CheckSquare },
-  { name: 'Istoric', path: '/istoric', icon: History },
+  { name: 'Clients', path: '/clients', icon: Users },
+  { name: 'Cases', path: '/cases', icon: Folder },
+  { name: 'Documents', path: '/documents', icon: FileText },
+  { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+  { name: 'Audit Log', path: '/history', icon: History },
 ];
 
 export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
@@ -26,13 +26,13 @@ export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
         <div className="flex items-center justify-between mb-4 px-3">
           {!collapsedMode && (
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
-              Meniu
+              Menu
             </div>
           )}
           <button
             onClick={onCloseMobile}
             className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white"
-            aria-label="Închide meniul"
+            aria-label="Close menu"
           >
             <X className="w-5 h-5" />
           </button>
@@ -49,17 +49,15 @@ export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
                 onClick={onCloseMobile}
                 title={collapsedMode ? item.name : undefined}
                 className={({ isActive }) =>
-                  `flex items-center ${
-                    collapsedMode ? 'justify-center px-2.5' : 'gap-3.5 px-3'
-                  } py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20 shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/40'
-                  }`
+                      ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#101b33]'
+                  } ${collapsedMode ? 'justify-center px-0' : ''}`
                 }
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                {!collapsedMode && <span className="truncate">{item.name}</span>}
+                <Icon className="w-5 h-5 shrink-0" />
+                {!collapsedMode && <span>{item.name}</span>}
               </NavLink>
             );
           })}
@@ -67,9 +65,11 @@ export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
       </div>
 
       {!collapsedMode && (
-        <div className="pt-6 border-t border-[#121c2e] text-xs text-slate-500 px-3">
-          <p className="font-semibold text-slate-400">Departament Retail</p>
-          <p className="text-[11px] text-slate-600 mt-0.5">BankDesk v2.4 + Copilot</p>
+        <div className="pt-6 border-t border-[#142036]">
+          <div className="p-3.5 rounded-xl bg-[#090f1e] border border-[#142036] text-xs text-slate-400">
+            <span className="block font-medium text-slate-300">Retail Department</span>
+            <span className="text-[11px] text-slate-400">Credit Operations & Triage</span>
+          </div>
         </div>
       )}
     </div>
@@ -77,27 +77,31 @@ export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
 
   return (
     <>
+      {/* Mobile Drawer */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
+          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onCloseMobile}
+      >
+        <aside
+          className={`w-64 h-full bg-[#050811] border-r border-[#142036] p-4 transition-transform duration-300 ${
+            isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {sidebarContent(false)}
+        </aside>
+      </div>
+
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col bg-[#050811] border-r border-[#121c2e] shrink-0 transition-all duration-200 sticky top-[65px] h-[calc(100vh-65px)] ${
-          isCollapsed ? 'w-16 p-3' : 'w-60 p-5'
+        className={`hidden lg:block shrink-0 bg-[#050811] border-r border-[#142036] p-4 transition-all duration-300 ${
+          isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
         {sidebarContent(isCollapsed)}
       </aside>
-
-      {/* Mobile & Tablet Slide-Over Sidebar */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs"
-            onClick={onCloseMobile}
-          />
-          <aside className="relative z-10 w-64 max-w-[80vw] bg-[#070c18] border-r border-[#182640] p-5 h-full shadow-2xl">
-            {sidebarContent(false)}
-          </aside>
-        </div>
-      )}
     </>
   );
 }

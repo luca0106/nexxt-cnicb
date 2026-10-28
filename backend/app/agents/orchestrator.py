@@ -14,11 +14,11 @@ import urllib.error
 # =============================================================================
 def run_pii_shield(case_obj, documents: list) -> Dict[str, Any]:
     """
-    Simulates and executes PII masking (CNP, IBAN, Serie CI, Email, Telefon)
+    Simulates and executes PII masking (National ID, IBAN, ID Card Series, Email, Phone)
     before sending document payloads to external LLM endpoints.
     """
-    cnp = case_obj.client.cnp or ""
-    masked_cnp = f"{cnp[:3]}********{cnp[-2:]}" if len(cnp) == 13 else "***MASKED***"
+    nat_id = case_obj.client.national_id or ""
+    masked_nat_id = f"{nat_id[:3]}********{nat_id[-2:]}" if len(nat_id) >= 8 else "***MASKED***"
 
     phone = case_obj.client.phone or ""
     masked_phone = f"{phone[:6]}***{phone[-3:]}" if len(phone) > 8 else "***MASKED***"
@@ -28,35 +28,35 @@ def run_pii_shield(case_obj, documents: list) -> Dict[str, Any]:
         user_part, domain_part = email.split("@", 1)
         masked_email = f"{user_part[:2]}***@{domain_part}"
     else:
-        masked_email = "***@***.ro"
+        masked_email = "***@bank.com"
 
-    id_series = case_obj.client.id_card_series or "RK 000000"
+    id_series = case_obj.client.id_card_series or "ID 000000"
     masked_id_series = f"{id_series[:2]} ***{id_series[-2:]}"
 
     masked_tokens = [
         {
-            "category": "CNP (Cod Numeric Personal)",
-            "original_preview": cnp,
-            "masked_token": f"[PII_CNP_{masked_cnp}]",
-            "gdpr_article": "Art. 4 & Art. 32 GDPR - Pseudonimizare"
+            "category": "National Identification Number (SSN / Tax ID)",
+            "original_preview": nat_id,
+            "masked_token": f"[PII_NAT_ID_{masked_nat_id}]",
+            "gdpr_article": "Art. 4 & Art. 32 GDPR - Pseudonymization"
         },
         {
-            "category": "Serie & Nr. Act Identitate",
+            "category": "Identity Card Series & Number",
             "original_preview": id_series,
-            "masked_token": f"[PII_CI_{masked_id_series}]",
-            "gdpr_article": "Art. 32 GDPR - Protecția datelor de identificare"
+            "masked_token": f"[PII_ID_SERIES_{masked_id_series}]",
+            "gdpr_article": "Art. 32 GDPR - Identity Data Protection"
         },
         {
-            "category": "Date Contact (Telefon / Email)",
+            "category": "Contact Details (Phone / Email)",
             "original_preview": f"{phone} / {email}",
             "masked_token": f"[PII_CONTACT_{masked_phone}]",
-            "gdpr_article": "Securitate Bancară Internă"
+            "gdpr_article": "Internal Bank Data Security"
         },
         {
-            "category": "Cont IBAN Bancar",
-            "original_preview": "RO49RZBR0000060019283741",
-            "masked_token": "[PII_IBAN_RO49************3741]",
-            "gdpr_article": "Secret Bancar & BNR Compliance"
+            "category": "Bank Account IBAN",
+            "original_preview": "AT49RZBR0000060019283741",
+            "masked_token": "[PII_IBAN_AT49************3741]",
+            "gdpr_article": "Banking Secrecy & Regulatory Compliance"
         }
     ]
 
@@ -64,18 +64,18 @@ def run_pii_shield(case_obj, documents: list) -> Dict[str, Any]:
         "enabled": True,
         "status": "active_protection",
         "masked_fields_count": len(masked_tokens),
-        "compliance_standard": "GDPR EU 2016/679 & Norme BNR",
+        "compliance_standard": "GDPR EU 2016/679 & Banking Secrecy Regulations",
         "tokens": masked_tokens,
         "explanation": (
-            "Toți identificatorii cu caracter personal (CNP, IBAN, Serie CI, Telefon) au fost "
-            "tokenizați local înainte de procesarea multi-agentică și re-hidratați exclusiv în "
-            "interfața internă a ofițerului bancar."
+            "All personally identifiable information (National ID, IBAN, ID Card, Phone) has been "
+            "tokenized locally before multi-agent processing and re-hydrated exclusively within "
+            "the secure interface of the authorized loan officer."
         )
     }
 
 
 # =============================================================================
-# TOOL 2: DETERMINISTIC PYTHON FINANCIAL & DTI CALCULATOR (ZERO HALLUCINATION)
+# TOOL 2: DETERMINISTIC FINANCIAL & DTI CALCULATOR (ZERO HALLUCINATION)
 # =============================================================================
 def calculate_feasibility_math(
     monthly_income: float,
@@ -86,8 +86,8 @@ def calculate_feasibility_math(
     alternative_income: Optional[float] = None
 ) -> Dict[str, Any]:
     """
-    Pure Python deterministic financial calculation for monthly loan installment
-    and Debt-to-Income (Grad de Îndatorare - DTI), enforcing BNR's 40% ceiling.
+    Deterministic financial calculation for monthly loan installment
+    and Debt-to-Income (DTI), enforcing the regulatory 40% threshold.
     """
     P = float(requested_amount or 0.0)
     n = int(loan_term_months or 60)
@@ -106,7 +106,7 @@ def calculate_feasibility_math(
     monthly_installment = round(monthly_installment, 2)
     total_monthly_obligation = round(monthly_installment + float(existing_debts or 0.0), 2)
 
-    max_dti_limit = 40.0  # BNR Standard Limit 40%
+    max_dti_limit = 40.0  # Regulatory Limit: 40%
 
     inc_primary = float(monthly_income or 1.0)
     dti_primary = round((total_monthly_obligation / inc_primary) * 100.0, 2) if inc_primary > 0 else 0.0
@@ -119,27 +119,27 @@ def calculate_feasibility_math(
             "declared_dti_percent": dti_primary,
             "verified_income": alternative_income,
             "verified_dti_percent": dti_alt,
-            "difference_ron": round(abs(alternative_income - monthly_income), 2)
+            "difference": round(abs(alternative_income - monthly_income), 2)
         }
 
     is_feasible = dti_primary <= max_dti_limit
 
     return {
-        "calculator_engine": "Python Deterministic Financial Engine (Standard Math - Fără LLM)",
-        "requested_amount_ron": P,
+        "calculator_engine": "Deterministic Financial Engine (Standard Annuity Formula - No LLM Hallucination)",
+        "requested_amount": P,
         "loan_term_months": n,
         "annual_interest_rate_percent": r_annual,
-        "calculated_monthly_installment_ron": monthly_installment,
-        "existing_monthly_debts_ron": float(existing_debts or 0.0),
-        "total_monthly_obligation_ron": total_monthly_obligation,
-        "monthly_income_used_ron": monthly_income,
+        "calculated_monthly_installment": monthly_installment,
+        "existing_monthly_debts": float(existing_debts or 0.0),
+        "total_monthly_obligation": total_monthly_obligation,
+        "monthly_income_used": monthly_income,
         "dti_percentage": dti_primary,
         "max_dti_limit_percent": max_dti_limit,
-        "max_allowed_installment_ron": round(inc_primary * (max_dti_limit / 100.0) - float(existing_debts or 0.0), 2),
+        "max_allowed_installment": round(inc_primary * (max_dti_limit / 100.0) - float(existing_debts or 0.0), 2),
         "is_feasible": is_feasible,
-        "status_label": "ELIGIBIL FINANCIAR (< 40% BNR)" if is_feasible else "DEPĂȘIRE PRAG ÎNDATORARE (> 40%)",
+        "status_label": "FINANCIALLY ELIGIBLE (< 40% DTI Limit)" if is_feasible else "EXCEEDS MAXIMUM DTI THRESHOLD (> 40%)",
         "alternative_income_scenario": alt_comparison,
-        "formula_used": "Rata = P * [r(1+r)^n] / [(1+r)^n - 1] | DTI = (Rata_Noua + Obligatii_Existente) / Venit_Net * 100"
+        "formula_used": "Installment = P * [r(1+r)^n] / [(1+r)^n - 1] | DTI = (New_Installment + Existing_Debts) / Net_Income * 100"
     }
 
 
@@ -158,14 +158,14 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
         doc_code = doc.doc_code or f"doc-{doc.id}"
 
         for idx, raw_line in enumerate(lines, start=1):
-            clean_line = re.sub(r"^Rândul\s+\d+\s*:\s*", "", raw_line).strip()
+            clean_line = re.sub(r"^Line\s+\d+\s*:\s*", "", raw_line).strip()
 
             # 1. Extract Applicant Name
-            if "Nume și prenume solicitant:" in clean_line:
-                val = clean_line.split("Nume și prenume solicitant:")[-1].strip()
+            if "Applicant Name:" in clean_line or "Full Name:" in clean_line:
+                val = clean_line.split(":")[-1].strip()
                 extracted.append({
                     "field": "applicant_name",
-                    "label": "Nume și Prenume",
+                    "label": "Applicant Name",
                     "value": val,
                     "documentId": doc.id,
                     "docCode": doc_code,
@@ -176,11 +176,11 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     "quote": raw_line,
                     "confidence": 0.99
                 })
-            elif "domnul " in clean_line and "Se adeverește" in clean_line:
-                val = clean_line.split("domnul ")[-1].strip()
+            elif "Employee:" in clean_line:
+                val = clean_line.split("Employee:")[-1].strip()
                 extracted.append({
                     "field": "applicant_name",
-                    "label": "Nume și Prenume",
+                    "label": "Applicant Name",
                     "value": val,
                     "documentId": doc.id,
                     "docCode": doc_code,
@@ -191,18 +191,18 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     "quote": raw_line,
                     "confidence": 0.98
                 })
-            elif "Nume:" in clean_line and "Prenume:" in clean_line:
+            elif "Surname:" in clean_line and "Given Name:" in clean_line:
                 parts = [p.strip() for p in clean_line.split("|")]
-                last_n, first_n = "", ""
+                surname, given_name = "", ""
                 for p in parts:
-                    if p.startswith("Nume:"):
-                        last_n = p.replace("Nume:", "").strip()
-                    elif p.startswith("Prenume:"):
-                        first_n = p.replace("Prenume:", "").strip()
-                val = f"{first_n} {last_n}".strip()
+                    if p.startswith("Surname:"):
+                        surname = p.replace("Surname:", "").strip()
+                    elif p.startswith("Given Name:"):
+                        given_name = p.replace("Given Name:", "").strip()
+                val = f"{given_name} {surname}".strip()
                 extracted.append({
                     "field": "applicant_name",
-                    "label": "Nume și Prenume",
+                    "label": "Applicant Name",
                     "value": val,
                     "documentId": doc.id,
                     "docCode": doc_code,
@@ -213,12 +213,11 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     "quote": raw_line,
                     "confidence": 0.99
                 })
-            elif "Titular cont:" in clean_line or "Salariat:" in clean_line or "Solicitant:" in clean_line:
-                first_segment = clean_line.split("|")[0]
-                val = first_segment.split(":")[-1].strip()
+            elif "Account Holder:" in clean_line:
+                val = clean_line.split("|")[0].replace("Account Holder:", "").strip()
                 extracted.append({
                     "field": "applicant_name",
-                    "label": "Nume și Prenume",
+                    "label": "Applicant Name",
                     "value": val,
                     "documentId": doc.id,
                     "docCode": doc_code,
@@ -230,13 +229,15 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     "confidence": 0.98
                 })
 
-            # 2. Extract CNP
-            cnp_match = re.search(r"\b([1256]\d{12})\b", clean_line)
-            if cnp_match:
+            # 2. Extract National ID
+            nat_id_match = re.search(r"\b([1256]\d{12})\b", clean_line)
+            if not nat_id_match:
+                nat_id_match = re.search(r"ID:\s*([A-Z0-9]+)", clean_line)
+            if nat_id_match:
                 extracted.append({
-                    "field": "cnp",
-                    "label": "CNP",
-                    "value": cnp_match.group(1),
+                    "field": "national_id",
+                    "label": "National Identification Number",
+                    "value": nat_id_match.group(1),
                     "documentId": doc.id,
                     "docCode": doc_code,
                     "documentName": doc.file_name,
@@ -249,22 +250,23 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
 
             # 3. Extract Monthly Income
             if any(k in clean_line for k in [
-                "Venit lunar net declarat",
-                "Venit lunar net mediu realizat",
-                "Media încasărilor salariale lunare",
-                "Venit lunar net confirmat",
-                "Venit lunar net:"
+                "Declared Net Monthly Income",
+                "Certified Net Monthly Salary",
+                "Average Monthly Salary Inflow",
+                "Verified Net Monthly Income",
+                "Net Monthly Income:"
             ]):
-                num_match = re.search(r"(\d[\d\.]*)\s*RON", clean_line)
+                num_match = re.search(r"(\d[\d\.,]*)\s*(?:EUR|RON)", clean_line)
                 if num_match:
-                    raw_num = num_match.group(1).replace(".", "")
+                    raw_num = num_match.group(1).replace(",", "").replace(".", "")
+                    # normalize thousands
                     try:
-                        val_float = float(raw_num)
+                        val_float = float(num_match.group(1).replace(",", ""))
                         extracted.append({
                             "field": "monthly_income",
-                            "label": "Venit Lunar Net (RON)",
+                            "label": "Net Monthly Income",
                             "value": val_float,
-                            "formattedValue": f"{int(val_float):,}".replace(",", ".") + " RON",
+                            "formattedValue": f"€{int(val_float):,}",
                             "documentId": doc.id,
                             "docCode": doc_code,
                             "documentName": doc.file_name,
@@ -278,17 +280,12 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                         pass
 
             # 4. Extract Address
-            if any(k in clean_line for k in ["Adresă domiciliu", "Domiciliu:", "domiciliat în", "Adresă declarată:", "Str. Avram Iancu"]):
-                if "domiciliat în" in clean_line:
-                    addr_val = clean_line.split("domiciliat în")[-1].strip()
-                elif ":" in clean_line:
-                    addr_val = clean_line.split(":", 1)[-1].strip()
-                else:
-                    addr_val = clean_line.strip()
+            if any(k in clean_line for k in ["Declared Residential Address:", "Residential Address:", "Permanent Residence:", "Service Location Address:"]):
+                addr_val = clean_line.split(":", 1)[-1].strip()
                 if addr_val:
                     extracted.append({
                         "field": "address",
-                        "label": "Adresă Domiciliu",
+                        "label": "Residential Address",
                         "value": addr_val,
                         "documentId": doc.id,
                         "docCode": doc_code,
@@ -301,11 +298,11 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
                     })
 
             # 5. Extract ID Card Validity
-            if "Valabilitate:" in clean_line:
-                val_str = clean_line.split("Valabilitate:")[-1].strip()
+            if "Validity Period:" in clean_line or "Valid Until:" in clean_line:
+                val_str = clean_line.split(":")[-1].strip()
                 extracted.append({
                     "field": "id_card_validity",
-                    "label": "Valabilitate Carte Identitate",
+                    "label": "Identity Card Validity",
                     "value": val_str,
                     "documentId": doc.id,
                     "docCode": doc_code,
@@ -321,40 +318,40 @@ def run_extraction_agent(case_obj, documents: list) -> List[Dict[str, Any]]:
 
 
 # =============================================================================
-# AGENT 2A: POLICY AGENT (BANKING PROCEDURES & BNR REGULATIONS)
+# AGENT 2A: POLICY AGENT (BANKING PROCEDURES & REGULATORY COMPLIANCE)
 # =============================================================================
 def run_policy_agent(case_obj) -> List[Dict[str, Any]]:
     """
-    Searches the demonstrative procedure store for rules applicable to the case.
+    Searches the demonstrative procedure store for rules applicable to the loan case.
     """
     return [
         {
             "ruleId": "PROC-KYC-01",
-            "title": "Concordanța Identității pe Documente (Cross-Check KYC)",
-            "sourceDocument": "Manualul de Proceduri KYC & AML Raiffeisen (Demo) — Cap. 3.2",
-            "excerpt": "Numele, prenumele și CNP-ul solicitantului trebuie să fie identice literă cu literă pe actul de identitate, cererea de credit și documentele de venit. Orice diferență (ex: Ion vs Ioan) necesită validare umană sau rectificare.",
-            "category": "Identitate & KYC"
+            "title": "Identity Consistency Check (Cross-Check KYC)",
+            "sourceDocument": "Raiffeisen Bank Retail KYC & AML Manual — Section 3.2",
+            "excerpt": "Applicant given name, surname, and National ID must match letter-for-letter across the identity document, loan application form, and proof of income. Any discrepancies (e.g., John vs Jonathan) require human verification or document remediation.",
+            "category": "Identity & KYC"
         },
         {
             "ruleId": "PROC-DOC-02",
-            "title": "Valabilitatea Actelor de Identitate la Data Analizei",
-            "sourceDocument": "Norma Internă de Acceptare Clienți — Art. 14",
-            "excerpt": "Cartea de identitate trebuie să fie în termen de valabilitate la momentul analizei. În cazul unui document expirat, fluxul se suspendă automat și se solicită reîncărcarea documentului reînnoit.",
-            "category": "Validitate Documente"
+            "title": "Validity of Identity Documents at Assessment Date",
+            "sourceDocument": "Internal Customer Onboarding Policy — Article 14",
+            "excerpt": "The primary identity document must be strictly valid on the assessment date. In the case of an expired ID card, automated underwriting is suspended immediately, and an automated customer notification must be dispatched.",
+            "category": "Document Validity"
         },
         {
             "ruleId": "PROC-INC-03",
-            "title": "Verificarea Încrucișată a Veniturilor (Cerere vs Adeverință vs Extras)",
-            "sourceDocument": "Procedura de Creditare Retail — Secțiunea 5.1",
-            "excerpt": "Venitul net declarat de client în formularul de cerere se compară obligatoriu cu venitul net din adeverința de salariu/ANAF și încasările din extrasul de cont pe ultimele 3 luni. Discrepanțele se semnalează ofițerului fără ca sistemul să ghicească automat valoarea finală.",
-            "category": "Analiză Financiară"
+            "title": "Three-Way Income Cross-Check (Application vs Employer vs Bank Statement)",
+            "sourceDocument": "Retail Credit Underwriting Standard — Section 5.1",
+            "excerpt": "The net monthly income declared by the applicant must be reconciled against the employer salary certificate and the last 3 months of bank statement cash inflows. Discrepancies must be surfaced to the loan officer with exact source citations.",
+            "category": "Financial Assessment"
         },
         {
-            "ruleId": "NORMA-BNR-DTI-04",
-            "title": "Limita Maximă a Gradului de Îndatorare (40% BNR)",
-            "sourceDocument": "Regulamentul BNR nr. 17/2012 (actualizat) — Art. 7",
-            "excerpt": "Gradul total de îndatorare (obligații lunare existente + rata noului credit raportate la venitul net lunar eligibil) nu poate depăși pragul de 40% pentru creditele în RON.",
-            "category": "Eligibilitate BNR"
+            "ruleId": "REG-DTI-04",
+            "title": "Regulatory Maximum Debt-to-Income Ceiling (40% DTI)",
+            "sourceDocument": "Central Bank Consumer Lending Directive — Prudential Ceiling",
+            "excerpt": "The total monthly debt service obligations (existing loans + proposed loan installment) must not exceed 40% of the applicant verified net monthly eligible income.",
+            "category": "Prudential Lending Limit"
         }
     ]
 
@@ -369,34 +366,33 @@ def run_investigator_agent(
     feasibility_math: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
     """
-    Compares extracted fields across documents, applies deterministic rules,
+    Compares extracted fields across documents, applies deterministic policy rules,
     and produces structured Red Flags and Green Flags with 100% source citations.
     """
     findings: List[Dict[str, Any]] = []
 
-    # Group extracted fields by field name
     by_field: Dict[str, List[Dict[str, Any]]] = {}
     for item in extracted_fields:
         by_field.setdefault(item["field"], []).append(item)
 
-    # 1. Check ID Card Validity (Edge Case check)
+    # 1. Check ID Card Validity
     validity_items = by_field.get("id_card_validity", [])
     expired_found = False
     for v_item in validity_items:
-        if "EXPIRAT" in v_item["value"].upper() or "2026-02-10" in v_item["value"] or "10.02.2026" in v_item["value"]:
+        if "EXPIRED" in v_item["value"].upper() or "2026-02-10" in v_item["value"] or "10.02.2026" in v_item["value"]:
             expired_found = True
             findings.append({
                 "id": "finding-id-expired",
                 "flagType": "red_flag",
                 "type": "expired_document",
-                "severity": "critic",
+                "severity": "critical",
                 "field": "id_card_validity",
-                "fieldLabel": "Valabilitate Carte de Identitate",
+                "fieldLabel": "ID Card Validity",
                 "ruleRef": "PROC-DOC-02",
-                "title": "🔴 Alertă Critică: Carte de Identitate Expirată",
+                "title": "🔴 Critical Alert: Identity Card Expired",
                 "description": (
-                    "Actul de identitate atașat la dosar a expirat la data de 10.02.2026 (anterior datei curente a analizei). "
-                    "Conform procedurii PROC-DOC-02, dosarul nu poate fi aprobat fără reîncărcarea cărții de identitate valabile."
+                    "The national identity card attached to this file expired on 10.02.2026 (prior to the assessment date). "
+                    "Under policy PROC-DOC-02, this loan application cannot proceed to final approval until a renewed identity card is uploaded."
                 ),
                 "values": [
                     {
@@ -411,7 +407,7 @@ def run_investigator_agent(
                     }
                 ],
                 "status": "action_required",
-                "suggestedAction": "Trimite automat link securizat de reîncărcare CI către client prin Agentul de Remedieri.",
+                "suggestedAction": "Dispatch an automated secure re-upload link to the customer via the Remediation Agent.",
                 "selectableValues": [],
                 "resolvedValue": None
             })
@@ -421,12 +417,12 @@ def run_investigator_agent(
             "id": "finding-id-valid",
             "flagType": "green_flag",
             "type": "verified_match",
-            "severity": "validat",
+            "severity": "validated",
             "field": "id_card_validity",
-            "fieldLabel": "Valabilitate Carte de Identitate",
+            "fieldLabel": "ID Card Validity",
             "ruleRef": "PROC-DOC-02",
-            "title": "🟢 Act de Identitate în Termen de Valabilitate",
-            "description": f"Cartea de identitate este valabilă ({v_item['value']}), verificată conform PROC-DOC-02.",
+            "title": "🟢 Identity Card Currently Valid",
+            "description": f"The identity card is fully valid ({v_item['value']}), verified under PROC-DOC-02.",
             "values": [
                 {
                     "documentId": v_item["documentId"],
@@ -440,7 +436,7 @@ def run_investigator_agent(
                 }
             ],
             "status": "verified",
-            "suggestedAction": "Nicio acțiune necesară.",
+            "suggestedAction": "No action required.",
             "selectableValues": [],
             "resolvedValue": v_item["value"]
         })
@@ -453,15 +449,15 @@ def run_investigator_agent(
             "id": "finding-name-mismatch",
             "flagType": "red_flag",
             "type": "identity_mismatch",
-            "severity": "ridicat",
+            "severity": "high",
             "field": "applicant_name",
-            "fieldLabel": "Nume și Prenume Solicitant",
+            "fieldLabel": "Applicant Name",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🔴 Alertă Cross-Check: Nume diferit între documente ({' vs '.join(unique_names)})",
+            "title": f"🔴 Cross-Check Alert: Name Mismatch Across Documents ({' vs '.join(unique_names)})",
             "description": (
-                "Există o neconcordanță de prenume între actul de identitate / cererea de credit ('Ion Popescu') "
-                "și adeverința de venit emisă de angajator ('Ioan Popescu'). Conform PROC-KYC-01, eroarea materială "
-                "trebuie verificată cu originalul CI și confirmată de ofițer."
+                "A given name discrepancy exists between the national ID card / loan application ('John Miller') "
+                "and the employer income certificate ('Jonathan Miller'). Under PROC-KYC-01, this material inconsistency "
+                "must be reviewed against the national registry and confirmed by the officer."
             ),
             "values": [
                 {
@@ -477,7 +473,7 @@ def run_investigator_agent(
                 for item in name_items
             ],
             "status": "needs_review",
-            "suggestedAction": "Verifică numele din Cartea de Identitate și confirmă identitatea prin CNP comun (1920514410023).",
+            "suggestedAction": "Verify customer legal name on Identity Card and confirm identity match via shared National ID.",
             "selectableValues": unique_names,
             "resolvedValue": None
         })
@@ -486,12 +482,12 @@ def run_investigator_agent(
             "id": "finding-name-match",
             "flagType": "green_flag",
             "type": "verified_match",
-            "severity": "validat",
+            "severity": "validated",
             "field": "applicant_name",
-            "fieldLabel": "Nume și Prenume Solicitant",
+            "fieldLabel": "Applicant Name",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🟢 Concordanță Nume Solicitant ({unique_names[0]})",
-            "description": "Numele și prenumele corespund 100% pe toate documentele din dosar.",
+            "title": f"🟢 Full Name Consistency Verified ({unique_names[0]})",
+            "description": "Applicant full name matches 100% across all provided case documents.",
             "values": [
                 {
                     "documentId": item["documentId"],
@@ -506,30 +502,29 @@ def run_investigator_agent(
                 for item in name_items
             ],
             "status": "verified",
-            "suggestedAction": "Nicio acțiune necesară.",
+            "suggestedAction": "No action required.",
             "selectableValues": [],
             "resolvedValue": unique_names[0]
         })
 
-    # 3. Cross-Check Monthly Income across documents (PDF Core Example: 5.200 RON vs 5.700 RON)
+    # 3. Cross-Check Monthly Income across documents (5,200 EUR vs 5,700 EUR)
     income_items = by_field.get("monthly_income", [])
     unique_incomes = sorted(list({float(item["value"]) for item in income_items}))
     if len(unique_incomes) > 1:
-        formatted_vals = [f"{int(v):,}".replace(",", ".") + " RON" for v in unique_incomes]
+        formatted_vals = [f"€{int(v):,}" for v in unique_incomes]
         findings.append({
             "id": "finding-income-mismatch",
             "flagType": "red_flag",
             "type": "value_mismatch",
-            "severity": "ridicat",
+            "severity": "high",
             "field": "monthly_income",
-            "fieldLabel": "Venit Lunar Net",
+            "fieldLabel": "Net Monthly Income",
             "ruleRef": "PROC-INC-03",
-            "title": f"🟠 Discrepanță Venit Lunar: {' vs '.join(formatted_vals)}",
+            "title": f"🟠 Monthly Income Discrepancy: {' vs '.join(formatted_vals)}",
             "description": (
-                "Valoarea venitului lunar net declarată în Formularul de cerere (5.200 RON) diferă de valoarea "
-                "confirmată în Adeverința de venit și în Extrasul de cont bancar (5.700 RON). Sistemul indică "
-                "documentele-sursă și recomandă clarificarea sau selectarea valorii validate de ofițer; "
-                "nu ghicește automat care valoare trebuie impusă."
+                "The net monthly income declared on the Application Form (€5,200) differs from the amount "
+                "certified on the Employer Certificate and verified on the Bank Statement (€5,700). The Copilot highlights "
+                "the source documents and enables the loan officer to validate the final eligible income without the AI blindly guessing."
             ),
             "values": [
                 {
@@ -538,7 +533,7 @@ def run_investigator_agent(
                     "documentName": item["documentName"],
                     "documentType": item["documentType"],
                     "value": item["value"],
-                    "formattedValue": item.get("formattedValue", f"{item['value']} RON"),
+                    "formattedValue": item.get("formattedValue", f"€{item['value']}"),
                     "lineNumber": item["lineNumber"],
                     "page": item["page"],
                     "quote": item["quote"]
@@ -546,7 +541,7 @@ def run_investigator_agent(
                 for item in income_items
             ],
             "status": "needs_review",
-            "suggestedAction": "Verifică documentele-sursă și selectează venitul eligibil pentru calculul final de îndatorare.",
+            "suggestedAction": "Review source documents and select the eligible income to recalculate debt-to-income feasibility.",
             "selectableValues": unique_incomes,
             "resolvedValue": None
         })
@@ -556,12 +551,12 @@ def run_investigator_agent(
             "id": "finding-income-match",
             "flagType": "green_flag",
             "type": "verified_match",
-            "severity": "validat",
+            "severity": "validated",
             "field": "monthly_income",
-            "fieldLabel": "Venit Lunar Net",
+            "fieldLabel": "Net Monthly Income",
             "ruleRef": "PROC-INC-03",
-            "title": f"🟢 Venit Lunar Net Confirmat ({int(inc_val):,} RON)".replace(",", "."),
-            "description": "Venitul declarat în cerere corespunde exact cu adeverința de salariu și încasările din cont.",
+            "title": f"🟢 Verified Net Monthly Income: €{int(inc_val):,}",
+            "description": "Application income corresponds exactly with the employer salary slip and bank statement inflows.",
             "values": [
                 {
                     "documentId": item["documentId"],
@@ -576,7 +571,7 @@ def run_investigator_agent(
                 for item in income_items
             ],
             "status": "verified",
-            "suggestedAction": "Nicio acțiune necesară.",
+            "suggestedAction": "No action required.",
             "selectableValues": [],
             "resolvedValue": inc_val
         })
@@ -589,14 +584,14 @@ def run_investigator_agent(
             "id": "finding-address-mismatch",
             "flagType": "red_flag",
             "type": "value_mismatch",
-            "severity": "mediu",
+            "severity": "medium",
             "field": "address",
-            "fieldLabel": "Adresă Domiciliu / Factură",
+            "fieldLabel": "Residential Address",
             "ruleRef": "PROC-KYC-01",
-            "title": "🟠 Neconcordanță Adresă: Carte de Identitate vs Factură Utilități",
+            "title": "🟠 Address Discrepancy: ID Card vs Utility Bill",
             "description": (
-                f"Adresa din actul de identitate/cerere ('{unique_addrs[0]}') nu corespunde cu adresa de pe "
-                f"factura de utilități ('{unique_addrs[1]}')."
+                f"The address stated on the identity document ('{unique_addrs[0]}') differs from the service location "
+                f"address on the utility invoice ('{unique_addrs[1]}')."
             ),
             "values": [
                 {
@@ -612,7 +607,7 @@ def run_investigator_agent(
                 for item in addr_items
             ],
             "status": "needs_review",
-            "suggestedAction": "Solicită confirmarea adresei de corespondență actuale de la client.",
+            "suggestedAction": "Request proof of primary correspondence address update from customer.",
             "selectableValues": unique_addrs,
             "resolvedValue": None
         })
@@ -621,12 +616,12 @@ def run_investigator_agent(
             "id": "finding-address-match",
             "flagType": "green_flag",
             "type": "verified_match",
-            "severity": "validat",
+            "severity": "validated",
             "field": "address",
-            "fieldLabel": "Adresă Domiciliu",
+            "fieldLabel": "Residential Address",
             "ruleRef": "PROC-KYC-01",
-            "title": "🟢 Concordanță Adresă Domiciliu pe Documente",
-            "description": f"Adresa '{unique_addrs[0]}' este identică în toate documentele verificate.",
+            "title": "🟢 Residential Address Consistent Across Documents",
+            "description": f"The address '{unique_addrs[0]}' is identical across all inspected documents.",
             "values": [
                 {
                     "documentId": item["documentId"],
@@ -641,25 +636,25 @@ def run_investigator_agent(
                 for item in addr_items
             ],
             "status": "verified",
-            "suggestedAction": "Nicio acțiune necesară.",
+            "suggestedAction": "No action required.",
             "selectableValues": [],
             "resolvedValue": unique_addrs[0]
         })
 
-    # 5. Cross-Check CNP across documents
-    cnp_items = by_field.get("cnp", [])
-    unique_cnps = list({item["value"] for item in cnp_items})
-    if len(cnp_items) > 0 and len(unique_cnps) == 1:
+    # 5. Cross-Check National ID
+    nat_items = by_field.get("national_id", [])
+    unique_nats = list({item["value"] for item in nat_items})
+    if len(nat_items) > 0 and len(unique_nats) == 1:
         findings.append({
-            "id": "finding-cnp-match",
+            "id": "finding-natid-match",
             "flagType": "green_flag",
             "type": "verified_match",
-            "severity": "validat",
-            "field": "cnp",
-            "fieldLabel": "Cod Numeric Personal (CNP)",
+            "severity": "validated",
+            "field": "national_id",
+            "fieldLabel": "National Identification Number",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🟢 CNP Validat și Identic pe {len(cnp_items)} Documente ({unique_cnps[0]})",
-            "description": "Cifra de control a CNP-ului este validă și corespunde pe toate documentele atașate.",
+            "title": f"🟢 National ID Validated on {len(nat_items)} Documents ({unique_nats[0]})",
+            "description": "National ID check-digits verified; strictly identical on all submitted files.",
             "values": [
                 {
                     "documentId": item["documentId"],
@@ -671,37 +666,37 @@ def run_investigator_agent(
                     "page": item["page"],
                     "quote": item["quote"]
                 }
-                for item in cnp_items
+                for item in nat_items
             ],
             "status": "verified",
-            "suggestedAction": "Nicio acțiune necesară.",
+            "suggestedAction": "No action required.",
             "selectableValues": [],
-            "resolvedValue": unique_cnps[0]
+            "resolvedValue": unique_nats[0]
         })
 
-    # 6. Deterministic DTI Check finding
+    # 6. Deterministic DTI Assessment
     dti_pct = feasibility_math["dti_percentage"]
     findings.append({
         "id": "finding-dti-check",
         "flagType": "green_flag" if feasibility_math["is_feasible"] else "red_flag",
         "type": "dti_compliant" if feasibility_math["is_feasible"] else "dti_exceeded",
-        "severity": "validat" if feasibility_math["is_feasible"] else "critic",
+        "severity": "validated" if feasibility_math["is_feasible"] else "critical",
         "field": "dti_ratio",
-        "fieldLabel": "Grad de Îndatorare (Calcul Python Determinist)",
-        "ruleRef": "NORMA-BNR-DTI-04",
+        "fieldLabel": "Debt-to-Income Ratio (Deterministic Python Engine)",
+        "ruleRef": "REG-DTI-04",
         "title": (
-            f"🟢 Grad de Îndatorare Conform BNR: {dti_pct}% (Maxim admis: 40%)"
+            f"🟢 DTI Compliant with Regulatory Limits: {dti_pct}% (Max Allowed: 40%)"
             if feasibility_math["is_feasible"]
-            else f"🔴 Depășire Grad de Îndatorare BNR: {dti_pct}% (Maxim admis: 40%)"
+            else f"🔴 DTI Exceeds Regulatory Threshold: {dti_pct}% (Max Allowed: 40%)"
         ),
         "description": (
-            f"Calcul efectuat determinist în Python: Rata lunară estimată este {feasibility_math['calculated_monthly_installment_ron']} RON "
-            f"(Obligații totale: {feasibility_math['total_monthly_obligation_ron']} RON / lună raportat la venitul de "
-            f"{int(feasibility_math['monthly_income_used_ron'])} RON)."
+            f"Calculated deterministically in Python: Estimated monthly installment is €{feasibility_math['calculated_monthly_installment']} "
+            f"(Total debt service: €{feasibility_math['total_monthly_obligation']} / month against monthly income of "
+            f"€{int(feasibility_math['monthly_income_used'])})."
         ),
         "values": [],
         "status": "verified" if feasibility_math["is_feasible"] else "action_required",
-        "suggestedAction": "Eligibil din punct de vedere al gradului de îndatorare." if feasibility_math["is_feasible"] else "Redu suma solicitată sau extinde perioada.",
+        "suggestedAction": "Applicant is financially eligible under regulatory DTI guidelines." if feasibility_math["is_feasible"] else "Reduce requested loan amount or extend loan tenure.",
         "selectableValues": [],
         "resolvedValue": f"{dti_pct}%"
     })
@@ -719,7 +714,7 @@ def run_remediation_and_workflow_agent(
 ) -> Dict[str, Any]:
     """
     If critical edge cases or discrepancies are detected, prepares or auto-triggers
-    an automated SMS/Email with a secure upload link to the client, and builds the
+    an automated SMS/Email with a secure upload link to the customer, and builds the
     officer's workflow checklist.
     """
     red_flags = [f for f in findings if f["flagType"] == "red_flag"]
@@ -727,12 +722,12 @@ def run_remediation_and_workflow_agent(
     has_discrepancy = any(f["type"] in ("value_mismatch", "identity_mismatch") for f in red_flags)
 
     token = uuid.uuid4().hex[:10]
-    secure_link = f"https://onboarding.raiffeisen-demo.ro/reupload/dosar-{case_obj.case_number}?token={token}"
+    secure_link = f"https://onboarding.raiffeisen-bank.com/reupload/case-{case_obj.case_number}?token={token}"
 
     if has_expired_id:
         remediation = {
             "required": True,
-            "triggerReason": "Edge Case Critică: Carte de Identitate expirată (10.02.2026) și neconcordanță adresă factură",
+            "triggerReason": "Critical Edge Case: Identity Card expired (10.02.2026) and utility bill address mismatch",
             "automationMode": "auto_dispatched_on_triage",
             "status": "sent_automatically",
             "sentAt": datetime.utcnow().strftime("%d.%m.%Y %H:%M"),
@@ -742,26 +737,26 @@ def run_remediation_and_workflow_agent(
             "recipientPhone": case_obj.client.phone,
             "secureUploadLink": secure_link,
             "smsPreview": (
-                f"Raiffeisen Bank: Salut {case_obj.client.full_name.split()[0]}, pentru dosarul #{case_obj.case_number} "
-                f"am observat ca actul de identitate atasat este expirat. Incarca rapid noua Carte de Identitate aici: {secure_link}"
+                f"Raiffeisen Bank: Dear {case_obj.client.full_name.split()[0]}, regarding case #{case_obj.case_number}, "
+                f"your uploaded ID card is expired. Please securely upload your renewed ID card here: {secure_link}"
             ),
-            "emailSubject": f"[Acțiune Necesară] Reîncărcare Carte de Identitate — Dosar #{case_obj.case_number}",
+            "emailSubject": f"[Action Required] Renewed ID Card Needed — Case #{case_obj.case_number}",
             "emailBody": (
-                f"Stimate/Stimată {case_obj.client.full_name},\n\n"
-                f"Sistemul nostru de verificare rapidă a analizat documentele aferente dosarului #{case_obj.case_number} ({case_obj.title}).\n\n"
-                f"Am identificat următoarele aspecte care necesită actualizare înainte de aprobarea finală:\n"
-                f"1. Cartea de Identitate atașată (Seria CJ Nr. 110294) figurează cu termenul de valabilitate expirat la 10.02.2026.\n"
-                f"2. Adresa de pe factura de utilități (Str. Avram Iancu nr. 99) diferă de adresa declarată (Str. Victoriei nr. 45).\n\n"
-                f"Pentru a nu fi necesar un drum în sucursală, vă rugăm să încărcați fotografia noii Cărți de Identitate folosind link-ul securizat de mai jos:\n"
+                f"Dear {case_obj.client.full_name},\n\n"
+                f"Our automated loan triage copilot has reviewed the documents for case #{case_obj.case_number} ({case_obj.title}).\n\n"
+                f"We noticed the following items that require an update before final approval:\n"
+                f"1. Your uploaded Identity Card expired on 10.02.2026.\n"
+                f"2. Your utility bill address differs from your primary declared residence.\n\n"
+                f"To avoid visiting a bank branch, please upload a clear photo of your renewed Identity Card using this secure encrypted link:\n"
                 f"👉 {secure_link}\n\n"
-                f"Dosarul dvs. va fi reluat automat imediat după încărcare.\n\n"
-                f"Cu respect,\nEchipa Raiffeisen Bank — Operațiuni Credite"
+                f"Your file will resume processing automatically as soon as the document is uploaded.\n\n"
+                f"Sincerely,\nRaiffeisen Bank Lending Operations"
             )
         }
     elif has_discrepancy:
         remediation = {
             "required": True,
-            "triggerReason": "Discrepanțe identificate la Cross-Check: Venit lunar (5.200 vs 5.700 RON) și Prenume ('Ion' vs 'Ioan')",
+            "triggerReason": "Cross-Check Discrepancies: Monthly Income (€5,200 vs €5,700) and Given Name ('John' vs 'Jonathan')",
             "automationMode": "ready_for_officer_approval",
             "status": "draft_ready",
             "sentAt": None,
@@ -771,24 +766,24 @@ def run_remediation_and_workflow_agent(
             "recipientPhone": case_obj.client.phone,
             "secureUploadLink": secure_link,
             "smsPreview": (
-                f"Raiffeisen Bank: Salut {case_obj.client.full_name.split()[0]}, pentru dosarul #{case_obj.case_number} "
-                f"avem nevoie de o scurta confirmare privind adeverinta de venit. Acceseaza link-ul securizat: {secure_link}"
+                f"Raiffeisen Bank: Hello {case_obj.client.full_name.split()[0]}, regarding case #{case_obj.case_number}, "
+                f"we need a quick clarification on your income certificate. Visit your secure link: {secure_link}"
             ),
-            "emailSubject": f"Clarificare documente dosar #{case_obj.case_number} — Raiffeisen Bank",
+            "emailSubject": f"Document Clarification Request: Case #{case_obj.case_number} — Raiffeisen Bank",
             "emailBody": (
-                f"Stimate domnule {case_obj.client.full_name},\n\n"
-                f"În cadrul verificării dosarului dvs. de credit #{case_obj.case_number}, am observat două diferențe între documentele transmise:\n"
-                f"• În formularul de cerere a fost declarat un venit net de 5.200 RON, în timp ce adeverința de salariu și extrasul de cont atestă 5.700 RON.\n"
-                f"• Pe adeverința emisă de angajator (Tech Solutions SRL, Rândul 4) prenumele este trecut 'Ioan Popescu', față de 'Ion Popescu' în Cartea de Identitate.\n\n"
-                f"Vă rugăm să confirmați electronic actualizarea valorii venitului în cerere sau să încărcați rectificarea adeverinței prin link-ul securizat:\n"
+                f"Dear {case_obj.client.full_name},\n\n"
+                f"During the underwriting audit of your loan application #{case_obj.case_number}, our copilot highlighted two items:\n"
+                f"• Your application form states a net income of €5,200, whereas your employer salary slip and bank statement confirm €5,700.\n"
+                f"• Your employer salary slip lists your given name as 'Jonathan Miller' versus 'John Miller' on your ID card.\n\n"
+                f"Please confirm your updated income value or upload a revised employer certificate via your secure link:\n"
                 f"👉 {secure_link}\n\n"
-                f"Cu respect,\nConsultant 024 — Departament Credite Retail"
+                f"Sincerely,\nConsultant 024 — Retail Lending Department"
             )
         }
     else:
         remediation = {
             "required": False,
-            "triggerReason": "Toate verificările au trecut cu succes (0 Red Flags). Nu este necesară remedierea.",
+            "triggerReason": "All checks passed successfully (0 Red Flags). No remediation required.",
             "automationMode": "none",
             "status": "not_needed",
             "sentAt": None,
@@ -802,62 +797,60 @@ def run_remediation_and_workflow_agent(
             "emailBody": ""
         }
 
-    # Build Officer Workflow Checklist
     checklist = [
         {
             "step": 1,
-            "title": "Verificare Identitate & Valabilitate CI (PROC-KYC-01 / DOC-02)",
+            "title": "Identity Verification & ID Card Validity (PROC-KYC-01 / DOC-02)",
             "status": "failed" if has_expired_id else ("review" if any(f["field"] == "applicant_name" and f["flagType"] == "red_flag" for f in findings) else "passed"),
-            "detail": "CI Expirat — solicitare reîncărcare trimisă" if has_expired_id else (
-                "CNP identic (1920514410023), dar necesită confirmare ofițer pentru 'Ion' vs 'Ioan'"
-                if has_discrepancy else "Identitate și valabilitate CI confirmate 100%"
+            "detail": "Expired ID Card — automated upload request dispatched" if has_expired_id else (
+                "National ID confirmed (1920514410023); requires officer sign-off for 'John' vs 'Jonathan'"
+                if has_discrepancy else "Identity and document validity 100% verified"
             )
         },
         {
             "step": 2,
-            "title": "Cross-Check Venituri: Cerere vs Adeverință vs Extras (PROC-INC-03)",
+            "title": "Three-Way Income Reconciliation: Application vs Certificate vs Statement",
             "status": "review" if any(f["field"] == "monthly_income" and f["flagType"] == "red_flag" for f in findings) else "passed",
             "detail": (
-                "Discrepanță detectată: 5.200 RON (Cerere) vs 5.700 RON (Adeverință & Extras). Selectează valoarea validată."
+                "Discrepancy detected: €5,200 (Application) vs €5,700 (Employer Certificate & Bank Statement). Select eligible amount."
                 if any(f["field"] == "monthly_income" and f["flagType"] == "red_flag" for f in findings)
-                else f"Venit net confirmat fără discrepanțe ({int(feasibility_math['monthly_income_used_ron'])} RON)"
+                else f"Net income verified without discrepancies (€{int(feasibility_math['monthly_income_used'])})"
             )
         },
         {
             "step": 3,
-            "title": "Calcul Matematic Grad de Îndatorare BNR (Max 40%)",
+            "title": "Regulatory Debt-to-Income Calculation (Max 40% Ceiling)",
             "status": "passed" if feasibility_math["is_feasible"] else "failed",
-            "detail": f"Calcul Python determinist: {feasibility_math['dti_percentage']}% (Rată lunară: {feasibility_math['calculated_monthly_installment_ron']} RON)"
+            "detail": f"Deterministic Python Math: {feasibility_math['dti_percentage']}% DTI (Proposed Installment: €{feasibility_math['calculated_monthly_installment']})"
         },
         {
             "step": 4,
-            "title": "Decizie Finală Ofițer Credite (Human-in-the-Loop)",
+            "title": "Final Credit Officer Decision (Human-in-the-Loop)",
             "status": "pending_human",
-            "detail": "Sistemul AI a pregătit dosarul. Decizia bancară finală aparține exclusiv ofițerului."
+            "detail": "AI Copilot has prepared the case audit trail. Final lending decision remains strictly with the human officer."
         }
     ]
 
-    # Summary & Risk Score
     if has_expired_id:
-        risk_score = "critic"
+        risk_score = "critical"
         summary = (
-            f"Triaj AI finalizat pentru Dosarul #{case_obj.case_number}: Document critic expirat (Carte de Identitate expirată la 10.02.2026) "
-            f"și neconcordanță adresă pe factura de utilități. Agentul de Remedieri a generat notificarea cu link securizat de reîncărcare."
+            f"AI Triage completed for Case #{case_obj.case_number}: Critical blocker identified — ID card expired on 10.02.2026 "
+            f"and utility invoice address discrepancy. Remediation Agent has dispatched an automated customer upload link."
         )
     elif has_discrepancy:
-        risk_score = "mediu"
+        risk_score = "medium"
         summary = (
-            f"Analiza AI a identificat 2 discrepanțe pe Dosarul #{case_obj.case_number} care necesită revizuirea ofițerului: "
-            f"(1) Venit lunar net 5.200 RON în cerere vs 5.700 RON în adeverință și extras; "
-            f"(2) Prenume 'Ion' în CI vs 'Ioan' în adeverință (același CNP). "
-            f"Eligibilitatea financiară este pozitivă (Grad de îndatorare {feasibility_math['dti_percentage']}% < 40% BNR)."
+            f"AI Analysis flagged 2 items on Case #{case_obj.case_number} requiring officer review: "
+            f"(1) Monthly net income €5,200 on application vs €5,700 on certificate & statement; "
+            f"(2) Given name 'John' on ID card vs 'Jonathan' on certificate. "
+            f"Financial eligibility is positive (DTI {feasibility_math['dti_percentage']}% < 40% limit)."
         )
     else:
-        risk_score = "scazut"
+        risk_score = "low"
         summary = (
-            f"Dosarul #{case_obj.case_number} a trecut toate verificările încrucișate (0 discrepanțe). "
-            f"Identitatea, valabilitatea CI, adresa și venitul ({int(feasibility_math['monthly_income_used_ron'])} RON) corespund 100%. "
-            f"Gradul de îndatorare calculat este {feasibility_math['dti_percentage']}% (< 40% BNR). Dosar pregătit pentru aprobare."
+            f"Case #{case_obj.case_number} passed all cross-checks (0 discrepancies). "
+            f"Identity, document validity, address, and net monthly income (€{int(feasibility_math['monthly_income_used'])}) are 100% consistent. "
+            f"Calculated DTI is {feasibility_math['dti_percentage']}% (< 40% ceiling). Case ready for instant approval."
         )
 
     return {
@@ -868,9 +861,6 @@ def run_remediation_and_workflow_agent(
     }
 
 
-# =============================================================================
-# OPTIONAL REAL LLM ENHANCEMENT (HYBRID ENGINE)
-# =============================================================================
 def try_llm_executive_note(summary: str, findings: list, provider: str = "auto", api_key: Optional[str] = None) -> tuple[str, str]:
     """
     If an OpenAI or Gemini API key is configured, enriches the executive summary
@@ -886,11 +876,11 @@ def try_llm_executive_note(summary: str, findings: list, provider: str = "auto",
                 "messages": [
                     {
                         "role": "system",
-                        "content": "Ești copilotul de audit bancar Raiffeisen Bank. Rezumă în 2 propoziții scurte și profesionale constatările pentru ofițerul de credite, fără a inventa cifre."
+                        "content": "You are a professional banking credit copilot for Raiffeisen Bank. Summarize the findings in 2 short professional sentences for the loan officer without inventing any figures."
                     },
                     {
                         "role": "user",
-                        "content": f"Rezumat curent: {summary}. Constatări: {json.dumps([f['title'] for f in findings], ensure_ascii=False)}"
+                        "content": f"Current summary: {summary}. Findings: {json.dumps([f['title'] for f in findings])}"
                     }
                 ],
                 "temperature": 0.1,
@@ -919,7 +909,7 @@ def try_llm_executive_note(summary: str, findings: list, provider: str = "auto",
             req_body = json.dumps({
                 "contents": [{
                     "parts": [{
-                        "text": f"Rezumă în 2 propoziții profesionale în română pentru un ofițer bancar: {summary}"
+                        "text": f"Summarize in 2 professional English sentences for a credit officer: {summary}"
                     }]
                 }]
             }).encode("utf-8")
@@ -941,9 +931,9 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
     """
     Executes the full end-to-end Multi-Agentic workflow:
       1. PII Shield (GDPR Anonymization)
-      2. Parallel: Extraction Agent (OCR & JSON Schema) || Policy Agent (BNR & Internal Rules)
-      3. Investigator Agent (Cross-Checker) + Python Deterministic Math Calculator
-      4. Remediation & Workflow Agent (Client SMS/Email Automation + Officer Checklist)
+      2. Parallel: Extraction Agent (OCR & JSON Schema) || Policy Agent (Regulations & Internal Rules)
+      3. Investigator Agent (Cross-Checker) + Deterministic Math Calculator
+      4. Remediation & Workflow Agent (Customer Notification Automation + Officer Checklist)
     """
     documents = list(case_obj.documents)
     now_iso = datetime.utcnow().isoformat() + "Z"
@@ -951,11 +941,11 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
     # Step 1: PII Shield
     pii_result = run_pii_shield(case_obj, documents)
 
-    # Step 2 (Parallel conceptually): Extraction Agent & Policy Agent
+    # Step 2: Extraction Agent & Policy Agent
     extracted_fields = run_extraction_agent(case_obj, documents)
     policy_rules = run_policy_agent(case_obj)
 
-    # Determine incomes found for math calculator
+    # Incomes detected
     incomes = sorted(list({float(item["value"]) for item in extracted_fields if item["field"] == "monthly_income"}))
     primary_income = incomes[0] if incomes else float(case_obj.client.monthly_income or 5000.0)
     alt_income = incomes[1] if len(incomes) > 1 else None
@@ -976,7 +966,7 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
     # Step 4: Remediation & Workflow Agent
     workflow_out = run_remediation_and_workflow_agent(case_obj, findings, feasibility_math)
 
-    # Optional Hybrid LLM polish
+    # Hybrid LLM Summary polish
     final_summary, engine_name = try_llm_executive_note(
         workflow_out["summary"],
         findings,
@@ -984,7 +974,6 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
         api_key=api_key
     )
 
-    # Step 5: Execution Trace (for full auditability as required by PDF Section 5)
     red_flags_count = sum(1 for f in findings if f["flagType"] == "red_flag")
     green_flags_count = sum(1 for f in findings if f["flagType"] == "green_flag")
 
@@ -997,7 +986,7 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
             "status": "completed",
             "durationMs": 140,
             "timestamp": now_iso,
-            "outputSummary": f"{pii_result['masked_fields_count']} categorii de date sensibile (CNP, CI, IBAN, Contact) pseudonimizate conform GDPR."
+            "outputSummary": f"{pii_result['masked_fields_count']} sensitive data categories (National ID, ID Series, IBAN, Contact) pseudonymized under GDPR."
         },
         {
             "step": 2,
@@ -1007,17 +996,17 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
             "status": "completed",
             "durationMs": 890,
             "timestamp": now_iso,
-            "outputSummary": f"{len(documents)} documente procesate ({', '.join(d.doc_code or d.file_name for d in documents)}). {len(extracted_fields)} câmpuri extrase cu rând și sursă."
+            "outputSummary": f"{len(documents)} documents parsed ({', '.join(d.doc_code or d.file_name for d in documents)}). {len(extracted_fields)} fields extracted with line citations."
         },
         {
             "step": 3,
-            "agent": "Policy Agent (Norme BNR & Proceduri)",
+            "agent": "Policy Agent (Regulatory & Internal Rules)",
             "tool": "policy_vector_search",
             "executionMode": "parallel_group_A",
             "status": "completed",
             "durationMs": 420,
             "timestamp": now_iso,
-            "outputSummary": f"{len(policy_rules)} proceduri bancare și norme BNR identificate (PROC-KYC-01, PROC-DOC-02, PROC-INC-03, NORMA-BNR-DTI-04)."
+            "outputSummary": f"{len(policy_rules)} banking regulations and guidelines identified (PROC-KYC-01, PROC-DOC-02, PROC-INC-03, REG-DTI-04)."
         },
         {
             "step": 4,
@@ -1027,20 +1016,20 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
             "status": "completed",
             "durationMs": 610,
             "timestamp": now_iso,
-            "outputSummary": f"Cross-check finalizat: {red_flags_count} Red Flags (Alerte) și {green_flags_count} Green Flags (Validări). DTI calculat în Python: {feasibility_math['dti_percentage']}%."
+            "outputSummary": f"Cross-check complete: {red_flags_count} Red Flags (Alerts) and {green_flags_count} Green Flags (Validations). DTI calculated in Python: {feasibility_math['dti_percentage']}%."
         },
         {
             "step": 5,
             "agent": "Remediation & Workflow Agent",
-            "tool": "client_notification_builder + report_compiler",
+            "tool": "customer_notification_builder + report_compiler",
             "executionMode": "dependent_on_step_4",
             "status": "completed",
             "durationMs": 380,
             "timestamp": now_iso,
             "outputSummary": (
-                f"Notificare client ({workflow_out['remediation']['status']}) și checklist Human-in-the-Loop generate."
+                f"Customer notification ({workflow_out['remediation']['status']}) and Human-in-the-Loop checklist compiled."
                 if workflow_out["remediation"]["required"]
-                else "Dosar complet validat. Raport final și checklist de aprobare pregătite pentru ofițer."
+                else "Case fully validated. Executive report and instant approval checklist ready for loan officer."
             )
         }
     ]
@@ -1069,4 +1058,3 @@ def execute_multi_agent_pipeline(case_obj, provider: str = "auto", api_key: Opti
         "executionTrace": execution_trace,
         "metrics": metrics
     }
-

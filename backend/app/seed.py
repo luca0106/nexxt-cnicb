@@ -7,186 +7,186 @@ def seed_database(db: Session):
     if db.query(Case).first():
         return
 
-    print("Seeding initial BankDesk & Raiffeisen AI Copilot demo data...")
+    print("Seeding initial BankDesk & Raiffeisen AI Copilot demo data (English)...")
 
     # =========================================================================
     # 1. CLIENTS FOR THE 3 CORE DEMO SCENARIOS
     # =========================================================================
 
-    # Scenariul 1: Discrepanțe Cross-Check (Nume "Ion" vs "Ioan" & Venit 5.200 vs 5.700 RON)
-    client_ion = Client(
-        full_name="Ion Popescu",
-        cnp="1920514410023",
-        email="ion.popescu@exemplu.ro",
-        phone="+40 722 345 678",
-        address="Str. George Enescu nr. 14, Sector 1, București",
-        employer="Tech Solutions SRL",
+    # Scenario 1: Cross-Check Discrepancy (Given name "John" vs "Jonathan" & Income €5,200 vs €5,700)
+    client_john = Client(
+        full_name="John Miller",
+        national_id="1920514410023",
+        email="john.miller@example.com",
+        phone="+43 676 123 4567",
+        address="14 George Enescu St, Sector 1, Vienna",
+        employer="Tech Solutions Ltd",
         monthly_income=5200.0,
         existing_monthly_debts=200.0,
-        id_card_series="RK 892011",
+        id_card_series="ID 892011",
         id_card_expiry="2031-05-14",
-        id_card_issuer="SPCLEP Sector 1",
+        id_card_issuer="City Registry Authority",
         birth_date="14.05.1992",
-        marital_status="Căsătorit",
+        marital_status="Married",
         dependents_count=1,
-        housing_status="Proprietar (Fără ipotecă)",
-        employer_cui="RO34928172",
-        employment_contract_type="Perioadă nedeterminată (Normă întreagă)",
-        seniority_current_employer="2 ani și 4 luni",
-        seniority_total="7 ani",
+        housing_status="Owner (No Mortgage)",
+        employer_cui="ATU34928172",
+        employment_contract_type="Permanent Full-Time",
+        seniority_current_employer="2 years and 4 months",
+        seniority_total="7 years",
         fico_score=715,
-        credit_bureau_status="Fără restanțe în ultimele 48 luni (Clasa A)",
+        credit_bureau_status="No delinquencies past 48 months (Class A)",
         credit_bureau_active_loans=1,
-        pep_status="Nu (Negativ conform legii)",
-        aml_status="Conform L129/2019 — Fără alerte sau interdicții",
+        pep_status="Negative (Non-PEP)",
+        aml_status="Compliant — No Alerts",
         anaf_consent=True,
         anaf_income=5700.0,
         created_at=datetime.utcnow() - timedelta(days=5)
     )
 
-    # Scenariul 3: Dosar 100% Valid (Green Flags & Grad de îndatorare 18.3% < 40%)
+    # Scenario 3: 100% Valid Clean Case (Green Flags & Debt-to-Income 17.8% < 40%)
     client_elena = Client(
         full_name="Elena Radu",
-        cnp="2881120420015",
-        email="elena.radu@exemplu.ro",
-        phone="+40 740 112 233",
-        address="Bvd. Unirii nr. 88, Sector 3, București",
-        employer="Global Logistica SA",
+        national_id="2881120420015",
+        email="elena.radu@example.com",
+        phone="+43 660 987 6543",
+        address="88 Union Blvd, Sector 3, Vienna",
+        employer="Global Logistics Corp",
         monthly_income=6800.0,
         existing_monthly_debts=350.0,
         id_card_series="RX 441209",
         id_card_expiry="2032-11-20",
-        id_card_issuer="SPCLEP Sector 3",
+        id_card_issuer="District Registry Authority",
         birth_date="20.11.1988",
-        marital_status="Căsătorită",
+        marital_status="Married",
         dependents_count=2,
-        housing_status="Proprietar",
-        employer_cui="RO18492019",
-        employment_contract_type="Perioadă nedeterminată",
-        seniority_current_employer="4 ani",
-        seniority_total="11 ani",
+        housing_status="Owner",
+        employer_cui="ATU18492019",
+        employment_contract_type="Permanent Full-Time",
+        seniority_current_employer="4 years",
+        seniority_total="11 years",
         fico_score=745,
-        credit_bureau_status="Fără întârzieri (Clasa A)",
+        credit_bureau_status="No delinquencies (Class A)",
         credit_bureau_active_loans=1,
-        pep_status="Nu (Negativ)",
-        aml_status="Conform L129/2019 — Fără alerte",
+        pep_status="Negative (Non-PEP)",
+        aml_status="Compliant — No Alerts",
         anaf_consent=True,
         anaf_income=6800.0,
         created_at=datetime.utcnow() - timedelta(days=12)
     )
 
-    # Scenariul 2: Edge Case Critică (Buletin Expirat + Adresă factură diferită -> Auto-Remediere SMS/Email)
-    client_mihai = Client(
-        full_name="Mihai Dumitrescu",
-        cnp="1850315400089",
-        email="mihai.dumitrescu@exemplu.ro",
-        phone="+40 733 998 877",
-        address="Str. Victoriei nr. 45, Cluj-Napoca",
-        employer="Nova Distribution SRL",
+    # Scenario 2: Critical Edge Case (Expired ID Card + Utility Invoice Mismatch -> Automated SMS/Email)
+    client_michael = Client(
+        full_name="Michael Scott",
+        national_id="1850315400089",
+        email="michael.scott@example.com",
+        phone="+43 699 555 1234",
+        address="45 Victory St, Salzburg",
+        employer="Nova Distribution GmbH",
         monthly_income=4500.0,
         existing_monthly_debts=400.0,
-        id_card_series="CJ 110294",
-        id_card_expiry="2026-02-10",  # EXPIRAT!
-        id_card_issuer="SPCLEP Cluj-Napoca",
+        id_card_series="SL 110294",
+        id_card_expiry="2026-02-10",  # EXPIRED!
+        id_card_issuer="Salzburg Registry",
         birth_date="15.03.1985",
-        marital_status="Necăsătorit",
+        marital_status="Single",
         dependents_count=0,
-        housing_status="Chirie",
-        employer_cui="RO29481720",
-        employment_contract_type="Perioadă nedeterminată",
-        seniority_current_employer="1 an",
-        seniority_total="6 ani",
+        housing_status="Rented",
+        employer_cui="ATU29481720",
+        employment_contract_type="Permanent Full-Time",
+        seniority_current_employer="1 year",
+        seniority_total="6 years",
         fico_score=640,
-        credit_bureau_status="Fără restanțe active (1 întârziere istorică < 30 zile)",
+        credit_bureau_status="No active delinquencies (1 minor historical delay < 30 days)",
         credit_bureau_active_loans=2,
-        pep_status="Nu (Negativ)",
-        aml_status="Conform L129/2019 — Fără alerte",
+        pep_status="Negative (Non-PEP)",
+        aml_status="Compliant — No Alerts",
         anaf_consent=False,
         anaf_income=None,
         created_at=datetime.utcnow() - timedelta(days=20)
     )
 
-    db.add_all([client_ion, client_elena, client_mihai])
+    db.add_all([client_john, client_elena, client_michael])
     db.commit()
 
     # =========================================================================
     # 2. MAIN CASES (MATCHING SCREENSHOT #10482, #10479, #10475)
     # =========================================================================
 
-    # Dosar #10482 - Cerere de credit (În verificare) -> SCENARIUL 1: Discrepanțe Venit & Nume
+    # Case #10482 - Loan Application (In Review) -> SCENARIO 1: Income & Name Discrepancy
     case_10482 = Case(
         case_number="10482",
-        title="Cerere de credit de nevoi personale",
-        case_type="Credit de Nevoi Personale Flexicredit",
-        status="in_verificare",
-        department="Credite Retail",
-        branch="Agenția Piața Unirii București",
+        title="Personal Consumer Loan Application",
+        case_type="Personal Consumer Loan",
+        status="in_review",
+        department="Retail Lending",
+        branch="Central Plaza Branch",
         channel="Online Web Onboarding",
-        priority="ridicat",
+        priority="high",
         assigned_to="Consultant 024",
         requested_amount=45000.0,
         loan_term_months=60,
         interest_rate_annual=8.9,
-        interest_type="Fixă (promoțională)",
+        interest_type="Fixed (Promotional)",
         dae_percent=9.42,
         monthly_installment=932.14,
         dti_percent=19.86,
-        currency="RON",
+        currency="EUR",
         scenario_tag="discrepancy_case",
-        notes="Cerere de credit de nevoi personale depusă online. Solicitantul a declarat venit lunar de 5.200 RON, însă adeverința de venit și extrasul de cont atestă 5.700 RON. Verificare identitate: discrepanță minoră prenume între CI ('Ion') și adeverință ('Ioan'). Necesită validare ofițer înainte de emiterea contractului.",
-        client_id=client_ion.id,
+        notes="Online loan request. Supporting files submitted. Discrepancy noted between stated income (€5,200) vs verified certificate & bank statement (€5,700). Requires cross-check before final contract approval.",
+        client_id=client_john.id,
         created_at=datetime.utcnow() - timedelta(hours=3),
         updated_at=datetime.utcnow() - timedelta(hours=1)
     )
 
-    # Dosar #10479 - Actualizare date client (Complet) -> SCENARIUL 3: Dosar Valid (Green Flags)
+    # Case #10479 - Customer Profile Update (Completed) -> SCENARIO 3: Valid Clean Case
     case_10479 = Case(
         case_number="10479",
-        title="Actualizare KYC & Majorare Plafon Credit",
-        case_type="Actualizare KYC & Plafon Credit",
-        status="complet",
-        department="Operațiuni Clienți",
-        branch="Agenția Calea Victoriei",
-        channel="Sucursală Direct",
+        title="Customer Profile Update & Credit Limit Review",
+        case_type="KYC Update & Credit Limit Review",
+        status="completed",
+        department="Client Operations",
+        branch="Financial District Branch",
+        channel="Direct Branch",
         priority="normal",
         assigned_to="Consultant 024",
         requested_amount=35000.0,
         loan_term_months=48,
         interest_rate_annual=8.5,
-        interest_type="Variabilă (IRCC + 3.25%)",
+        interest_type="Variable (Euribor + 3.25%)",
         dae_percent=8.84,
         monthly_installment=862.40,
         dti_percent=17.83,
-        currency="RON",
+        currency="EUR",
         scenario_tag="valid_green_case",
-        notes="Dosar complet și conform normelor BNR. Venituri confirmate prin raport ANAF și adeverință de salariu. Fără discrepanțe de identificare. Eligibilitate confirmată pentru aprobare directă.",
+        notes="All documents match 100%. Identity, residential address, and net income verified without inconsistencies. DTI is well within limits.",
         client_id=client_elena.id,
         created_at=datetime.utcnow() - timedelta(hours=18),
         updated_at=datetime.utcnow() - timedelta(hours=4)
     )
 
-    # Dosar #10475 - Deschidere cont (În așteptare) -> SCENARIUL 2: Edge Case (Buletin Expirat)
+    # Case #10475 - Account Opening (Pending) -> SCENARIO 2: Edge Case (Expired ID)
     case_10475 = Case(
         case_number="10475",
-        title="Deschidere cont curent & Linie overdraft",
-        case_type="Cont Curent & Linie Overdraft",
-        status="in_asteptare",
-        department="Conturi & Plăți",
-        branch="Agenția Cluj Central",
-        channel="Online Onboarding",
+        title="Current Account & Overdraft Facility",
+        case_type="Current Account & Overdraft Facility",
+        status="pending",
+        department="Accounts & Payments",
+        branch="West City Branch",
+        channel="Online Web Onboarding",
         priority="urgent",
         assigned_to="Consultant 024",
         requested_amount=15000.0,
         loan_term_months=36,
         interest_rate_annual=9.5,
-        interest_type="Fixă",
+        interest_type="Fixed",
         dae_percent=10.15,
         monthly_installment=480.50,
         dti_percent=19.57,
-        currency="RON",
+        currency="EUR",
         scenario_tag="expired_id_case",
-        notes="Atenție: Cartea de identitate a expirat la 10.02.2026. Factura de utilități prezintă o adresă diferită de domiciliul din actul de identitate. Dosarul este blocat la verificarea de conformitate până la prezentarea unui act de identitate valabil.",
-        client_id=client_mihai.id,
+        notes="Critical compliance blocker identified: Customer ID card is expired and utility invoice location address differs. Requires renewed valid ID before processing.",
+        client_id=client_michael.id,
         created_at=datetime.utcnow() - timedelta(days=1, hours=2),
         updated_at=datetime.utcnow() - timedelta(hours=8)
     )
@@ -195,216 +195,216 @@ def seed_database(db: Session):
     db.commit()
 
     # =========================================================================
-    # 3. DOCUMENTS FOR DOSAR #10482 (SCENARIUL 1: DISCREPANȚE VENIT & NUME)
+    # 3. DOCUMENTS FOR CASE #10482 (SCENARIO 1: INCOME & NAME DISCREPANCY)
     # =========================================================================
     docs_10482 = [
         Document(
             case_id=case_10482.id,
             doc_code="doc-1",
-            file_name="Formular_Cerere_Credit_10482.pdf",
-            document_type="Formular cerere",
+            file_name="Loan_Application_Form_10482.pdf",
+            document_type="Application Form",
             file_size_kb=340,
             page_count=2,
             status="uploaded",
             content_text=(
-                "Rândul 1: RAIFFEISEN BANK S.A. - FORMULAR CERERE DE CREDIT NEVOI PERSONALE\n"
-                "Rândul 2: Număr înregistrare dosar: #10482 | Data depunerii: 28.10.2026\n"
-                "Rândul 3: ------------------------------------------------------------------\n"
-                "Rândul 4: Nume și prenume solicitant: Ion Popescu\n"
-                "Rândul 5: Cod Numeric Personal (CNP): 1920514410023\n"
-                "Rândul 6: Adresă domiciliu declarat: Str. George Enescu nr. 14, Sector 1, București\n"
-                "Rândul 7: Angajator declarat: Tech Solutions SRL (Funcție: Inginer Software)\n"
-                "Rândul 8: Venit lunar net declarat de solicitant: 5.200 RON\n"
-                "Rândul 9: Suma solicitată: 45.000 RON | Perioada de creditare: 60 luni\n"
-                "Rândul 10: Alte rate sau obligații lunare declarate: 0 RON\n"
-                "Rândul 11: Semnătură electronică calificată: VALIDĂ (OTP #99412)"
+                "Line 1: RAIFFEISEN BANK INTERNATIONAL - PERSONAL LOAN APPLICATION FORM\n"
+                "Line 2: Case Registration Number: #10482 | Submission Date: 28.10.2026\n"
+                "Line 3: ------------------------------------------------------------------\n"
+                "Line 4: Applicant Name: John Miller\n"
+                "Line 5: National ID Number: 1920514410023\n"
+                "Line 6: Declared Residential Address: 14 George Enescu St, Sector 1, Vienna\n"
+                "Line 7: Employer: Tech Solutions Ltd (Role: Software Engineer)\n"
+                "Line 8: Declared Net Monthly Income: 5,200 EUR\n"
+                "Line 9: Requested Loan Amount: 45,000 EUR | Loan Term: 60 Months\n"
+                "Line 10: Other Monthly Debt Obligations: 0 EUR\n"
+                "Line 11: Electronic Signature: VERIFIED (SMS OTP #99412)"
             ),
             created_at=datetime.utcnow() - timedelta(hours=3)
         ),
         Document(
             case_id=case_10482.id,
             doc_code="doc-2",
-            file_name="Adeverinta_Venit_TechSolutions_10482.pdf",
-            document_type="Adeverință venit",
+            file_name="Employer_Income_Certificate_TechSolutions_10482.pdf",
+            document_type="Income Certificate",
             file_size_kb=215,
             page_count=1,
             status="flagged",
             content_text=(
-                "Rândul 1: ADEVERINȚĂ DE VENIT NR. 4481 / 25.10.2026\n"
-                "Rândul 2: Emisă de: S.C. Tech Solutions S.R.L., CUI RO38921104, J40/8821/2018\n"
-                "Rândul 3: ------------------------------------------------------------------\n"
-                "Rândul 4: Se adeverește prin prezenta că domnul Ioan Popescu\n"
-                "Rândul 5: având CNP 1920514410023, domiciliat în Str. George Enescu nr. 14, Sector 1, București\n"
-                "Rândul 6: este angajat cu contract individual de muncă pe perioadă nedeterminată.\n"
-                "Rândul 7: Venituri salariale nete încasate în ultimele 3 luni:\n"
-                "Rândul 8: - Iulie 2026: 5.700 RON | August 2026: 5.700 RON | Septembrie 2026: 5.700 RON\n"
-                "Rândul 9: Venit lunar net mediu realizat: 5.700 RON\n"
-                "Rândul 10: Salariatul nu înregistrează popriri sau rețineri salariale."
+                "Line 1: OFFICIAL SALARY & INCOME CERTIFICATE NO. 4481 / 25.10.2026\n"
+                "Line 2: Issued by: Tech Solutions Ltd, Commercial Reg. FN38921104\n"
+                "Line 3: ------------------------------------------------------------------\n"
+                "Line 4: This is to certify that employee Jonathan Miller\n"
+                "Line 5: National ID: 1920514410023, residing at 14 George Enescu St, Sector 1, Vienna\n"
+                "Line 6: is employed under an open-ended permanent employment contract.\n"
+                "Line 7: Net monthly salaries disbursed over the last 3 months:\n"
+                "Line 8: - Month 1: 5,700 EUR | Month 2: 5,700 EUR | Month 3: 5,700 EUR\n"
+                "Line 9: Certified Net Monthly Salary: 5,700 EUR\n"
+                "Line 10: The employee has zero wage garnishments or salary deductions."
             ),
             created_at=datetime.utcnow() - timedelta(hours=2, minutes=50)
         ),
         Document(
             case_id=case_10482.id,
             doc_code="doc-3",
-            file_name="Extras_Cont_Bancar_3Luni_10482.pdf",
-            document_type="Extras financiar",
+            file_name="Bank_Statement_3Months_10482.pdf",
+            document_type="Bank Statement",
             file_size_kb=512,
             page_count=3,
             status="uploaded",
             content_text=(
-                "Rândul 1: EXTRAS DE CONT BANCAR - PERIOADA 01.07.2026 - 30.09.2026\n"
-                "Rândul 2: Titular cont: Ion Popescu | CNP: 1920514410023\n"
-                "Rândul 3: Cont IBAN: RO49RZBR0000060019283741 | Monedă: RON\n"
-                "Rândul 4: ------------------------------------------------------------------\n"
-                "Rândul 5: 15.07.2026 | Încasare salariu Tech Solutions SRL | +5.700,00 RON\n"
-                "Rândul 6: 15.08.2026 | Încasare salariu Tech Solutions SRL | +5.700,00 RON\n"
-                "Rândul 7: 15.09.2026 | Încasare salariu Tech Solutions SRL | +5.700,00 RON\n"
-                "Rândul 8: Media încasărilor salariale lunare: 5.700 RON\n"
-                "Rândul 9: Debite automate alte credite / popriri: 0,00 RON\n"
-                "Rândul 10: Sold final disponibil la 30.09.2026: 14.280,50 RON"
+                "Line 1: OFFICIAL BANK STATEMENT - PERIOD 01.07.2026 - 30.09.2026\n"
+                "Line 2: Account Holder: John Miller | National ID: 1920514410023\n"
+                "Line 3: IBAN: AT49RZBR0000060019283741 | Currency: EUR\n"
+                "Line 4: ------------------------------------------------------------------\n"
+                "Line 5: 15.07.2026 | Salary Inflow: Tech Solutions Ltd | +5,700.00 EUR\n"
+                "Line 6: 15.08.2026 | Salary Inflow: Tech Solutions Ltd | +5,700.00 EUR\n"
+                "Line 7: 15.09.2026 | Salary Inflow: Tech Solutions Ltd | +5,700.00 EUR\n"
+                "Line 8: Average Monthly Salary Inflow: 5,700 EUR\n"
+                "Line 9: Existing monthly external loan debt debits: 0.00 EUR\n"
+                "Line 10: Closing ledger balance at 30.09.2026: 14,280.50 EUR"
             ),
             created_at=datetime.utcnow() - timedelta(hours=2, minutes=40)
         ),
         Document(
             case_id=case_10482.id,
             doc_code="doc-4",
-            file_name="Carte_Identitate_CI_Ion_Popescu.pdf",
-            document_type="Copie CI",
+            file_name="National_Identity_Card_John_Miller.pdf",
+            document_type="ID Card Copy",
             file_size_kb=180,
             page_count=1,
             status="verified",
             content_text=(
-                "Rândul 1: ROMÂNIA - CARTE DE IDENTITATE (DOCUMENT SCANAT OCR)\n"
-                "Rândul 2: Seria RK Nr. 892011 | Emisă de SPCLEP Sector 1\n"
-                "Rândul 3: CNP: 1920514410023\n"
-                "Rândul 4: Nume: Popescu | Prenume: Ion\n"
-                "Rândul 5: Loc naștere: Mun. București, Sector 1\n"
-                "Rândul 6: Domiciliu: Str. George Enescu nr. 14, Sector 1, București\n"
-                "Rândul 7: Valabilitate: 14.05.2021 - 14.05.2031"
+                "Line 1: REPUBLIC OF AUSTRIA - NATIONAL IDENTITY CARD (OCR SCAN)\n"
+                "Line 2: Document Number: ID 892011 | Issuing Authority: Vienna District 1\n"
+                "Line 3: National ID: 1920514410023\n"
+                "Line 4: Surname: Miller | Given Name: John\n"
+                "Line 5: Nationality: Austrian | Place of Birth: Vienna\n"
+                "Line 6: Permanent Residence: 14 George Enescu St, Sector 1, Vienna\n"
+                "Line 7: Validity Period: 14.05.2021 - 14.05.2031"
             ),
             created_at=datetime.utcnow() - timedelta(hours=2, minutes=30)
         ),
     ]
 
     # =========================================================================
-    # 4. DOCUMENTS FOR DOSAR #10479 (SCENARIUL 3: DOSAR 100% VALID - GREEN FLAGS)
+    # 4. DOCUMENTS FOR CASE #10479 (SCENARIO 3: 100% VALID CASE)
     # =========================================================================
     docs_10479 = [
         Document(
             case_id=case_10479.id,
             doc_code="doc-1",
-            file_name="Formular_Actualizare_Si_Plafon_10479.pdf",
-            document_type="Formular cerere",
+            file_name="Customer_Update_And_Limit_Application_10479.pdf",
+            document_type="Application Form",
             file_size_kb=220,
             page_count=1,
             status="verified",
             content_text=(
-                "Rândul 1: RAIFFEISEN BANK - FORMULAR ACTUALIZARE DATE & PLAFON CREDIT\n"
-                "Rândul 2: Număr dosar: #10479 | Data: 27.10.2026\n"
-                "Rândul 3: Nume și prenume solicitant: Elena Radu\n"
-                "Rândul 4: CNP: 2881120420015\n"
-                "Rândul 5: Adresă domiciliu: Bvd. Unirii nr. 88, Sector 3, București\n"
-                "Rândul 6: Angajator: Global Logistica SA\n"
-                "Rândul 7: Venit lunar net declarat: 6.800 RON\n"
-                "Rândul 8: Obligații lunare existente (card cumpărături): 350 RON\n"
-                "Rândul 9: Plafon solicitat: 35.000 RON pe 48 luni"
+                "Line 1: RAIFFEISEN BANK - CUSTOMER DATA UPDATE & CREDIT LIMIT APPLICATION\n"
+                "Line 2: Case Number: #10479 | Date: 27.10.2026\n"
+                "Line 3: Applicant Name: Elena Radu\n"
+                "Line 4: National ID Number: 2881120420015\n"
+                "Line 5: Residential Address: 88 Union Blvd, Sector 3, Vienna\n"
+                "Line 6: Employer: Global Logistics Corp\n"
+                "Line 7: Declared Net Monthly Income: 6,800 EUR\n"
+                "Line 8: Existing Monthly Loan Repayments: 350 EUR\n"
+                "Line 9: Requested Credit Limit: 35,000 EUR for 48 Months"
             ),
             created_at=datetime.utcnow() - timedelta(hours=17)
         ),
         Document(
             case_id=case_10479.id,
             doc_code="doc-2",
-            file_name="Carte_Identitate_CI_Elena_Radu.pdf",
-            document_type="Copie CI",
+            file_name="National_Identity_Card_Elena_Radu.pdf",
+            document_type="ID Card Copy",
             file_size_kb=175,
             page_count=1,
             status="verified",
             content_text=(
-                "Rândul 1: ROMÂNIA - CARTE DE IDENTITATE\n"
-                "Rândul 2: Seria RX Nr. 441209 | SPCLEP Sector 3\n"
-                "Rândul 3: CNP: 2881120420015\n"
-                "Rândul 4: Nume: Radu | Prenume: Elena\n"
-                "Rândul 5: Domiciliu: Bvd. Unirii nr. 88, Sector 3, București\n"
-                "Rândul 6: Valabilitate: 20.11.2022 - 20.11.2032"
+                "Line 1: NATIONAL IDENTITY CARD\n"
+                "Line 2: Document Number: RX 441209\n"
+                "Line 3: National ID: 2881120420015\n"
+                "Line 4: Surname: Radu | Given Name: Elena\n"
+                "Line 5: Permanent Residence: 88 Union Blvd, Sector 3, Vienna\n"
+                "Line 6: Validity Period: 20.11.2022 - 20.11.2032"
             ),
             created_at=datetime.utcnow() - timedelta(hours=17)
         ),
         Document(
             case_id=case_10479.id,
             doc_code="doc-3",
-            file_name="Adeverinta_Venit_GlobalLogistica_10479.pdf",
-            document_type="Adeverință venit",
+            file_name="Employer_Certificate_GlobalLogistics_10479.pdf",
+            document_type="Income Certificate",
             file_size_kb=205,
             page_count=1,
             status="verified",
             content_text=(
-                "Rândul 1: ADEVERINȚĂ DE VENIT NR. 912 / 26.10.2026\n"
-                "Rândul 2: Angajator: Global Logistica S.A.\n"
-                "Rândul 3: Salariat: Elena Radu | CNP: 2881120420015\n"
-                "Rândul 4: Domiciliu: Bvd. Unirii nr. 88, Sector 3, București\n"
-                "Rândul 5: Venit lunar net confirmat: 6.800 RON\n"
-                "Rândul 6: Contract pe perioadă nedeterminată, fără popriri."
+                "Line 1: CERTIFICATE OF EMPLOYMENT AND EARNINGS NO. 912\n"
+                "Line 2: Employer: Global Logistics Corp\n"
+                "Line 3: Employee: Elena Radu | National ID: 2881120420015\n"
+                "Line 4: Permanent Residence: 88 Union Blvd, Sector 3, Vienna\n"
+                "Line 5: Verified Net Monthly Income: 6,800 EUR\n"
+                "Line 6: Permanent employment status; zero liens or garnishments."
             ),
             created_at=datetime.utcnow() - timedelta(hours=16)
         ),
     ]
 
     # =========================================================================
-    # 5. DOCUMENTS FOR DOSAR #10475 (SCENARIUL 2: EDGE CASE BULETIN EXPIRAT)
+    # 5. DOCUMENTS FOR CASE #10475 (SCENARIO 2: EXPIRED ID CARD)
     # =========================================================================
     docs_10475 = [
         Document(
             case_id=case_10475.id,
             doc_code="doc-1",
-            file_name="Cerere_Cont_Si_Overdraft_10475.pdf",
-            document_type="Formular cerere",
+            file_name="Account_And_Overdraft_Request_10475.pdf",
+            document_type="Application Form",
             file_size_kb=195,
             page_count=1,
             status="uploaded",
             content_text=(
-                "Rândul 1: CERERE DESCHIDERE CONT CURENT PREMIUM & LINIE OVERDRAFT\n"
-                "Rândul 2: Număr dosar: #10475 | Data: 27.10.2026\n"
-                "Rândul 3: Solicitant: Mihai Dumitrescu | CNP: 1850315400089\n"
-                "Rândul 4: Adresă declarată: Str. Victoriei nr. 45, Cluj-Napoca\n"
-                "Rândul 5: Venit lunar net: 4.500 RON | Angajator: Nova Distribution SRL\n"
-                "Rândul 6: Plafon Overdraft solicitat: 15.000 RON (36 luni)"
+                "Line 1: PREMIUM CURRENT ACCOUNT & OVERDRAFT LINE APPLICATION\n"
+                "Line 2: Case Reference: #10475 | Date: 27.10.2026\n"
+                "Line 3: Applicant Name: Michael Scott | National ID: 1850315400089\n"
+                "Line 4: Declared Residential Address: 45 Victory St, Salzburg\n"
+                "Line 5: Net Monthly Income: 4,500 EUR | Employer: Nova Distribution GmbH\n"
+                "Line 6: Requested Overdraft Line: 15,000 EUR (36 Months)"
             ),
             created_at=datetime.utcnow() - timedelta(days=1)
         ),
         Document(
             case_id=case_10475.id,
             doc_code="doc-2",
-            file_name="Carte_Identitate_CI_Mihai_Dumitrescu.pdf",
-            document_type="Copie CI",
+            file_name="Identity_Card_Michael_Scott.pdf",
+            document_type="ID Card Copy",
             file_size_kb=190,
             page_count=1,
             status="expired",
             content_text=(
-                "Rândul 1: ROMÂNIA - CARTE DE IDENTITATE\n"
-                "Rândul 2: Seria CJ Nr. 110294 | SPCLEP Cluj-Napoca\n"
-                "Rândul 3: CNP: 1850315400089\n"
-                "Rândul 4: Nume: Dumitrescu | Prenume: Mihai\n"
-                "Rândul 5: Domiciliu: Str. Victoriei nr. 45, Cluj-Napoca\n"
-                "Rândul 6: Data emiterii: 10.02.2016\n"
-                "Rândul 7: Valabilitate: 10.02.2016 - 10.02.2026 [DOCUMENT EXPIRAT]"
+                "Line 1: NATIONAL IDENTITY CARD\n"
+                "Line 2: Document Number: SL 110294\n"
+                "Line 3: National ID: 1850315400089\n"
+                "Line 4: Surname: Scott | Given Name: Michael\n"
+                "Line 5: Permanent Residence: 45 Victory St, Salzburg\n"
+                "Line 6: Issue Date: 10.02.2016\n"
+                "Line 7: Validity Period: 10.02.2016 - 10.02.2026 [DOCUMENT EXPIRED]"
             ),
             created_at=datetime.utcnow() - timedelta(days=1)
         ),
         Document(
             case_id=case_10475.id,
             doc_code="doc-3",
-            file_name="Factura_Utilitati_Electrica_10475.pdf",
-            document_type="Factură utilități",
+            file_name="Electricity_Utility_Bill_Salzburg_10475.pdf",
+            document_type="Utility Bill",
             file_size_kb=145,
             page_count=1,
             status="flagged",
             content_text=(
-                "Rândul 1: FACTURĂ ENERGIE ELECTRICĂ - OCTOMBRIE 2026\n"
-                "Rândul 2: Titular contract: Mihai Dumitrescu\n"
-                "Rândul 3: Cod client: 99018273\n"
-                "Rândul 4: Adresă corespondență și loc de consum:\n"
-                "Rândul 5: Str. Avram Iancu nr. 99, Ap. 12, Cluj-Napoca\n"
-                "Rândul 6: Total de plată: 245,80 RON"
+                "Line 1: RESIDENTIAL ELECTRICITY UTILITY BILL - OCTOBER 2026\n"
+                "Line 2: Account Holder: Michael Scott\n"
+                "Line 3: Customer Number: 99018273\n"
+                "Line 4: Service Location Address:\n"
+                "Line 5: 99 Mountain View Ave, Salzburg\n"
+                "Line 6: Total Invoice Amount: 245.80 EUR"
             ),
             created_at=datetime.utcnow() - timedelta(hours=22)
         ),
@@ -412,28 +412,28 @@ def seed_database(db: Session):
 
     db.add_all(docs_10482 + docs_10479 + docs_10475)
 
-    # Tasks & History logs
+    # Initial Tasks & History
     tasks = [
         Task(
             case_id=case_10482.id,
-            title="Verificare discrepanță venit (5.200 RON în cerere vs 5.700 RON în adeverință)",
-            status="in_lucru",
-            priority="ridicat",
+            title="Reconcile income discrepancy (€5,200 on application vs €5,700 on salary certificate)",
+            status="in_progress",
+            priority="high",
             assigned_to="Consultant 024",
             due_date=datetime.utcnow() + timedelta(days=1)
         ),
         Task(
             case_id=case_10482.id,
-            title="Clarificare neconcordanță prenume ('Ion' în CI vs 'Ioan' în adeverința de venit)",
-            status="in_lucru",
-            priority="ridicat",
+            title="Clarify given name discrepancy ('John' on ID vs 'Jonathan' on employer slip)",
+            status="in_progress",
+            priority="high",
             assigned_to="Consultant 024",
             due_date=datetime.utcnow() + timedelta(days=1)
         ),
         Task(
             case_id=case_10475.id,
-            title="Așteptare reîncărcare Carte de Identitate valabilă de la clientul Mihai Dumitrescu",
-            status="in_asteptare",
+            title="Await customer upload of renewed Identity Card for Michael Scott",
+            status="pending",
             priority="urgent",
             assigned_to="Consultant 024",
             due_date=datetime.utcnow() + timedelta(days=2)
@@ -443,30 +443,30 @@ def seed_database(db: Session):
     logs = [
         AuditLog(
             case_id=case_10482.id,
-            action="Înregistrare dosar credit",
-            performed_by="Portal Onboarding Raiffeisen",
-            details="Dosarul #10482 a fost creat și 4 documente justificative au fost atașate.",
+            action="Loan Case Registered",
+            performed_by="Raiffeisen Digital Onboarding Portal",
+            details="Case #10482 created online with 4 supporting documents uploaded.",
             timestamp=datetime.utcnow() - timedelta(hours=3)
         ),
         AuditLog(
             case_id=case_10482.id,
-            action="Alocare ofițer credite",
-            performed_by="Sistem Distribuție Automată",
-            details="Dosar alocat către Consultant 024 (Departament Credite Retail).",
+            action="Officer Assigned",
+            performed_by="Automated Case Routing",
+            details="Case assigned to Consultant 024 (Retail Lending Department).",
             timestamp=datetime.utcnow() - timedelta(hours=1)
         ),
         AuditLog(
             case_id=case_10479.id,
-            action="Validare completă dosar #10479",
+            action="Case Fully Validated",
             performed_by="Consultant 024",
-            details="Toate documentele și criteriile de eligibilitate au fost verificate cu succes.",
+            details="All compliance checks and underwriting criteria verified successfully.",
             timestamp=datetime.utcnow() - timedelta(hours=4)
         ),
         AuditLog(
             case_id=case_10475.id,
-            action="Triaj inițial documente #10475",
-            performed_by="Sistem Portal Online",
-            details="Documente încărcate pentru deschidere cont și linie overdraft.",
+            action="Initial Document Triage",
+            performed_by="Automated System",
+            details="Documents uploaded for current account and overdraft facility.",
             timestamp=datetime.utcnow() - timedelta(days=1)
         ),
     ]
@@ -474,26 +474,26 @@ def seed_database(db: Session):
     db.add_all(tasks + logs)
     db.commit()
 
-    # Additional cases so dashboard metrics equal EXACTLY:
-    # "În lucru": 24
-    # "De verificat": 7
+    # Additional demo cases so dashboard metrics match:
+    # "In Progress": 24
+    # "To Verify": 7
     verification_cases_data = [
-        ("10471", "Cerere credit ipotecar", "Credit Ipotecar", "Simona Vasile", 320000.0),
-        ("10468", "Refinanțare credit", "Refinanțare", "Cristian Enache", 75000.0),
-        ("10464", "Card de credit Gold", "Card de Credit", "Ioana Marin", 15000.0),
-        ("10460", "Credit auto nou", "Credit Auto", "Dan Gheorghiu", 88000.0),
-        ("10457", "Majorare limită descoperit", "Overdraft", "Victor Stanciu", 12000.0),
-        ("10451", "Cerere credit consum", "Credit de Nevoi Personale", "Carmen Tudor", 30000.0),
+        ("10471", "Residential Mortgage Loan", "Mortgage Loan", "Sarah Jenkins", 320000.0),
+        ("10468", "Debt Consolidation Facility", "Refinancing Loan", "Christian Evans", 75000.0),
+        ("10464", "Gold Credit Card Application", "Credit Card", "Joanna Miller", 15000.0),
+        ("10460", "Automotive Purchase Loan", "Auto Loan", "Daniel Green", 88000.0),
+        ("10457", "Overdraft Facility Extension", "Overdraft", "Victor Vance", 12000.0),
+        ("10451", "Consumer Express Loan", "Personal Consumer Loan", "Carmen Taylor", 30000.0),
     ]
 
     for idx, (c_num, title, c_type, cl_name, amount) in enumerate(verification_cases_data):
         cl = Client(
             full_name=cl_name,
-            cnp=f"18{idx}01014100{idx}1",
-            email=f"{cl_name.lower().replace(' ', '.')}@exemplu.ro",
-            phone=f"+40 721 00{idx} 11{idx}",
-            address=f"București, Str. Principală nr. {idx+10}",
-            employer="Companie Parteneră SA",
+            national_id=f"18{idx}01014100{idx}1",
+            email=f"{cl_name.lower().replace(' ', '.')}@example.com",
+            phone=f"+43 676 00{idx} 11{idx}",
+            address=f"Vienna, Main Street {idx+10}",
+            employer="Partner Enterprise Corp",
             monthly_income=5500.0 + idx * 450,
             existing_monthly_debts=200.0,
             id_card_series=f"RT 3301{idx}",
@@ -506,18 +506,18 @@ def seed_database(db: Session):
             case_number=c_num,
             title=title,
             case_type=c_type,
-            status="in_verificare",
-            department="Credite Retail",
-            branch=f"Sucursala Sector {idx % 6 + 1}",
-            channel="Sucursală Direct" if idx % 2 == 0 else "Online Onboarding",
+            status="in_review",
+            department="Retail Lending",
+            branch=f"Metropolitan Branch {idx % 6 + 1}",
+            channel="Direct Branch" if idx % 2 == 0 else "Online Web Onboarding",
             priority="normal",
             assigned_to="Consultant 024",
             requested_amount=amount,
             loan_term_months=60,
             interest_rate_annual=8.9,
-            currency="RON",
+            currency="EUR",
             scenario_tag="standard_case",
-            notes="Documentație completă, în așteptarea verificării de conformitate.",
+            notes="Complete documentation package pending compliance cross-check.",
             client_id=cl.id,
             created_at=datetime.utcnow() - timedelta(days=idx+1)
         )
@@ -527,33 +527,33 @@ def seed_database(db: Session):
         d = Document(
             case_id=c.id,
             doc_code="doc-1",
-            file_name=f"Formular_Cerere_{c_num}.pdf",
-            document_type="Formular cerere",
+            file_name=f"Loan_Application_{c_num}.pdf",
+            document_type="Application Form",
             file_size_kb=245,
             status="uploaded",
             content_text=(
-                f"Rândul 1: CERERE DE CREDIT #{c_num}\n"
-                f"Rândul 2: Solicitant: {cl_name} | CNP: {cl.cnp}\n"
-                f"Rândul 3: Adresă: {cl.address}\n"
-                f"Rândul 4: Venit lunar net declarat: {cl.monthly_income:.0f} RON\n"
-                f"Rândul 5: Suma solicitată: {amount:.0f} RON"
+                f"Line 1: LOAN APPLICATION #{c_num}\n"
+                f"Line 2: Applicant: {cl_name} | ID: {cl.national_id}\n"
+                f"Line 3: Address: {cl.address}\n"
+                f"Line 4: Declared Net Monthly Income: {cl.monthly_income:.0f} EUR\n"
+                f"Line 5: Requested Amount: {amount:.0f} EUR"
             )
         )
         db.add(d)
 
     for i in range(1, 25):
         num_str = str(10450 - i)
-        client_name = f"Client Retail {i}"
+        client_name = f"Retail Client {i}"
         cl = Client(
             full_name=client_name,
-            cnp=f"19{i:02d}1104100{i:02d}",
-            email=f"client.retail{i}@exemplu.ro",
-            phone=f"+40 720 100 {i:03d}",
-            address=f"Str. Libertății nr. {i}, București",
-            employer=f"Compania Națională {i} SRL",
+            national_id=f"19{i:02d}1104100{i:02d}",
+            email=f"client.retail{i}@example.com",
+            phone=f"+43 650 100 {i:03d}",
+            address=f"Liberty Blvd No. {i}, Vienna",
+            employer=f"National Corporation {i} Ltd",
             monthly_income=4800.0 + (i * 150),
             existing_monthly_debts=0.0,
-            id_card_series=f"RK 550{i:02d}",
+            id_card_series=f"ID 550{i:02d}",
             id_card_expiry="2031-12-01",
             fico_score=680 + (i % 80)
         )
@@ -562,20 +562,20 @@ def seed_database(db: Session):
 
         c = Case(
             case_number=num_str,
-            title=f"Dosar operațional #{num_str}",
-            case_type="Credit de Nevoi Personale" if i % 2 == 0 else "Servicii Cont Bancar",
-            status="in_lucru",
-            department="Credite Retail" if i % 2 == 0 else "Operațiuni Clienți",
-            branch="Agenția Unirii București" if i % 2 == 0 else "Agenția Victoriei",
-            channel="Online Onboarding" if i % 3 == 0 else "Sucursală",
+            title=f"Banking Operation #{num_str}",
+            case_type="Personal Consumer Loan" if i % 2 == 0 else "Account Services",
+            status="in_progress",
+            department="Retail Lending" if i % 2 == 0 else "Client Operations",
+            branch="Central Plaza Branch" if i % 2 == 0 else "Financial District Branch",
+            channel="Online Web Onboarding" if i % 3 == 0 else "Direct Branch",
             priority="urgent" if i % 5 == 0 else "normal",
             assigned_to="Consultant 024",
             requested_amount=25000.0 + (i * 1000),
             loan_term_months=48,
             interest_rate_annual=8.9,
-            currency="RON",
+            currency="EUR",
             scenario_tag="standard_case",
-            notes=f"Dosar în lucru pentru {client_name}.",
+            notes=f"Operational case in progress for {client_name}.",
             client_id=cl.id,
             created_at=datetime.utcnow() - timedelta(days=i, hours=2)
         )
@@ -585,18 +585,28 @@ def seed_database(db: Session):
         d = Document(
             case_id=c.id,
             doc_code="doc-1",
-            file_name=f"Formular_Cerere_{num_str}.pdf",
-            document_type="Formular cerere",
+            file_name=f"Application_Form_{num_str}.pdf",
+            document_type="Application Form",
             file_size_kb=150,
             status="uploaded",
             content_text=(
-                f"Rândul 1: FORMULAR OPERAȚIUNE BANCARĂ #{num_str}\n"
-                f"Rândul 2: Titular: {client_name} | CNP: {cl.cnp}\n"
-                f"Rândul 3: Venit lunar net: {cl.monthly_income:.0f} RON\n"
-                f"Rândul 4: Valabilitate CI: 01.12.2031"
+                f"Line 1: BANKING APPLICATION #{num_str}\n"
+                f"Line 2: Applicant: {client_name} | ID: {cl.national_id}\n"
+                f"Line 3: Net Monthly Income: {cl.monthly_income:.0f} EUR\n"
+                f"Line 4: ID Card Validity: 01.12.2031"
             )
         )
         db.add(d)
 
     db.commit()
-    print("Database successfully seeded with all 3 Raiffeisen AI Copilot demo scenarios!")
+    print("Database successfully seeded with English BankDesk & AI Copilot demo data!")
+
+
+if __name__ == "__main__":
+    from .database import engine, Base, SessionLocal
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_database(db)
+    finally:
+        db.close()

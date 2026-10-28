@@ -15,12 +15,22 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="dosare" element={<CasesList />} />
-          <Route path="dosare/:id" element={<CaseDetail />} />
-          <Route path="clienti" element={<ClientsList />} />
-          <Route path="documente" element={<DocumentsList />} />
-          <Route path="sarcini" element={<TasksList />} />
-          <Route path="istoric" element={<HistoryList />} />
+          {/* Primary English routes */}
+          <Route path="cases" element={<CasesList />} />
+          <Route path="cases/:id" element={<CaseDetail />} />
+          <Route path="clients" element={<ClientsList />} />
+          <Route path="documents" element={<DocumentsList />} />
+          <Route path="tasks" element={<TasksList />} />
+          <Route path="history" element={<HistoryList />} />
+
+          {/* Legacy Romanian redirects */}
+          <Route path="dosare" element={<Navigate to="/cases" replace />} />
+          <Route path="dosare/:id" element={<CasesListWrapper />} />
+          <Route path="clienti" element={<Navigate to="/clients" replace />} />
+          <Route path="documente" element={<Navigate to="/documents" replace />} />
+          <Route path="sarcini" element={<Navigate to="/tasks" replace />} />
+          <Route path="istoric" element={<Navigate to="/history" replace />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -28,3 +38,6 @@ export default function App() {
   );
 }
 
+function CasesListWrapper() {
+  return <CaseDetail />;
+}

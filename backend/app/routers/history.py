@@ -6,7 +6,8 @@ from ..database import get_db
 from ..models import AuditLog
 from ..schemas import AuditLogOut
 
-router = APIRouter(prefix="/history", tags=["Istoric"])
+router = APIRouter(prefix="/history", tags=["Audit Log"])
+
 
 @router.get("", response_model=List[AuditLogOut])
 def get_history(
@@ -18,4 +19,3 @@ def get_history(
     if case_id:
         query = query.filter(AuditLog.case_id == case_id)
     return query.order_by(AuditLog.timestamp.desc()).limit(limit).all()
-

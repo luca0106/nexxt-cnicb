@@ -8,20 +8,20 @@ from ..database import get_db
 from ..models import Case, Client, Document, Task, AuditLog
 from ..schemas import CaseListOut, CaseDetailOut, CaseCreate, CaseStatusUpdate, CaseManualFormUpdate
 
-router = APIRouter(prefix="/cases", tags=["Dosare"])
+router = APIRouter(prefix="/cases", tags=["Cases"])
 
 
 @router.get("", response_model=List[CaseListOut])
 def get_cases(
-    status: Optional[str] = Query(None, description="Filtru după status: in_lucru, in_verificare, complet, in_asteptare, respins"),
-    search: Optional[str] = Query(None, description="Căutare după număr dosar sau titlu"),
+    status: Optional[str] = Query(None, description="Status filter: in_progress, in_review, completed, pending, rejected"),
+    search: Optional[str] = Query(None, description="Search by case number or title"),
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
     query = db.query(Case)
 
-    if status and status != "toate":
+    if status and status != "all":
         query = query.filter(Case.status == status)
 
     if search:
@@ -31,7 +31,7 @@ def get_cases(
                 Case.case_number.ilike(search_filter),
                 Case.title.ilike(search_filter),
                 Client.full_name.ilike(search_filter),
-                Client.cnp.ilike(search_filter)
+                Client.national_id.ilike(search_filter)
             )
         )
 
@@ -76,7 +76,7 @@ def get_case(case_id: int, db: Session = Depends(get_db)):
     if not c:
         c = db.query(Case).filter(Case.case_number == str(case_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
+        raise HTTPException(status_code=404, detail="Case not found.")
     return c
 
 
@@ -84,7 +84,7 @@ def get_case(case_id: int, db: Session = Depends(get_db)):
 def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
     client = db.query(Client).filter(Client.id == payload.client_id).first()
     if not client:
-        raise HTTPException(status_code=400, detail="Clientul specificat nu există.")
+        raise HTTPException(status_code=400, detail="Specified client does not exist.")
 
     if not payload.case_number:
         last_case = db.query(Case).order_by(Case.id.desc()).first()
@@ -96,15 +96,15 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
     new_case = Case(
         case_number=case_number,
         title=payload.title,
-        case_type=payload.case_type or "Cerere de credit",
-        status=payload.status or "in_lucru",
-        department=payload.department or "Credite Retail",
+        case_type=payload.case_type or "Personal Loan Application",
+        status=payload.status or "in_progress",
+        department=payload.department or "Retail Lending",
         priority=payload.priority or "normal",
         assigned_to=payload.assigned_to or "Consultant 024",
         requested_amount=payload.requested_amount,
         loan_term_months=payload.loan_term_months or 60,
         interest_rate_annual=payload.interest_rate_annual or 8.9,
-        currency=payload.currency or "RON",
+        currency=payload.currency or "EUR",
         notes=payload.notes,
         scenario_tag=payload.scenario_tag or "standard_case",
         client_id=client.id,
@@ -116,9 +116,9 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
 
     log = AuditLog(
         case_id=new_case.id,
-        action="Creare dosar",
+        action="Case Created",
         performed_by=payload.assigned_to or "Consultant 024",
-        details=f"Dosarul #{new_case.case_number} a fost creat pentru clientul {client.full_name}."
+        details=f"Case #{new_case.case_number} initiated for client {client.full_name}."
     )
     db.add(log)
     db.commit()
@@ -132,7 +132,7 @@ def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = De
     if not c:
         c = db.query(Case).filter(Case.case_number == str(case_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
+        raise HTTPException(status_code=404, detail="Case not found.")
 
     old_status = c.status
     c.status = payload.status
@@ -142,9 +142,9 @@ def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = De
 
     log = AuditLog(
         case_id=c.id,
-        action="Actualizare status",
+        action="Status Updated",
         performed_by="Consultant 024",
-        details=f"Status schimbat din '{old_status}' în '{payload.status}'."
+        details=f"Status changed from '{old_status}' to '{payload.status}'."
     )
     db.add(log)
     db.commit()
@@ -154,21 +154,17 @@ def update_case_status(case_id: int, payload: CaseStatusUpdate, db: Session = De
 
 @router.patch("/{case_id}/manual-form", response_model=CaseDetailOut)
 def update_case_manual_form(case_id: int, payload: CaseManualFormUpdate, db: Session = Depends(get_db)):
-    """
-    Allows the bank officer to manually edit/save fields in the BankDesk case form
-    (Data Entry & Verification).
-    """
     c = db.query(Case).filter(Case.id == case_id).first()
     if not c:
         c = db.query(Case).filter(Case.case_number == str(case_id)).first()
     if not c:
-        raise HTTPException(status_code=404, detail="Dosarul nu a fost găsit.")
+        raise HTTPException(status_code=404, detail="Case not found.")
 
     if c.client:
         if payload.full_name is not None:
             c.client.full_name = payload.full_name
-        if payload.cnp is not None:
-            c.client.cnp = payload.cnp
+        if payload.national_id is not None:
+            c.client.national_id = payload.national_id
         if payload.address is not None:
             c.client.address = payload.address
         if payload.employer is not None:
@@ -189,9 +185,9 @@ def update_case_manual_form(case_id: int, payload: CaseManualFormUpdate, db: Ses
 
     log = AuditLog(
         case_id=c.id,
-        action="Actualizare Formular Verificare Dosar",
+        action="Underwriting Sheet Updated",
         performed_by="Consultant 024",
-        details=f"Datele dosarului #{c.case_number} au fost actualizate în fișa de lucru."
+        details=f"Case #{c.case_number} manual underwriting record updated."
     )
     db.add(log)
     db.commit()

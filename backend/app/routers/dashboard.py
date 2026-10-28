@@ -9,10 +9,10 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/stats", response_model=DashboardStats)
 def get_dashboard_stats(db: Session = Depends(get_db)):
-    in_lucru = db.query(Case).filter(Case.status == "in_lucru").count()
-    de_verificat = db.query(Case).filter(Case.status == "in_verificare").count()
-    complet = db.query(Case).filter(Case.status == "complet").count()
-    in_asteptare = db.query(Case).filter(Case.status == "in_asteptare").count()
+    in_progress = db.query(Case).filter(Case.status == "in_progress").count()
+    to_verify = db.query(Case).filter(Case.status == "in_review").count()
+    completed = db.query(Case).filter(Case.status == "completed").count()
+    pending = db.query(Case).filter(Case.status == "pending").count()
     total = db.query(Case).count()
 
     pinned_numbers = ["10482", "10479", "10475"]
@@ -60,10 +60,10 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         )
 
     return DashboardStats(
-        in_lucru=in_lucru,
-        de_verificat=de_verificat,
-        complet=complet,
-        in_asteptare=in_asteptare,
-        total_dosare=total,
+        in_progress=in_progress,
+        to_verify=to_verify,
+        completed=completed,
+        pending=pending,
+        total_cases=total,
         recent_cases=result_cases
     )

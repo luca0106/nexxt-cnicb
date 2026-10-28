@@ -17,7 +17,7 @@ export default function Dashboard() {
       setStats(data);
     } catch (err) {
       console.error(err);
-      setError('Nu s-au putut prelua datele de pe server.');
+      setError('Unable to load departmental statistics from server.');
     } finally {
       setLoading(false);
     }
@@ -29,34 +29,34 @@ export default function Dashboard() {
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'in_verificare':
+      case 'in_review':
         return (
           <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#2e1906] text-[#f97316] border border-[#7c2d12]/60">
-            În verificare
+            In review
           </span>
         );
-      case 'complet':
+      case 'completed':
         return (
           <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#052e16] text-[#22c55e] border border-[#14532d]/60">
-            Complet
+            Completed
           </span>
         );
-      case 'in_asteptare':
+      case 'pending':
         return (
           <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#1e293b] text-[#cbd5e1] border border-[#334155]/60">
-            În așteptare
+            Pending
           </span>
         );
-      case 'in_lucru':
+      case 'in_progress':
         return (
           <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#0f2347] text-[#38bdf8] border border-[#1e3a8a]/60">
-            În lucru
+            In progress
           </span>
         );
-      case 'respins':
+      case 'rejected':
         return (
           <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#3b0b14] text-[#f87171] border border-[#7f1d1d]/60">
-            Respins
+            Rejected
           </span>
         );
       default:
@@ -70,23 +70,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Title section */}
+      {/* Title section matching screenshot */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Dosare în lucru
+            Active Cases
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Situația activității din departament
+            Department activity overview
           </p>
         </div>
         <button
           onClick={loadData}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0e1626] border border-[#1a2842] hover:bg-[#152037] text-xs text-slate-300 transition-colors"
-          title="Reîmprospătează datele"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0e1626] border border-[#1a2842] hover:bg-[#152037] text-xs text-slate-300 transition-colors cursor-pointer"
+          title="Refresh Statistics"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Actualizează</span>
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -99,44 +99,44 @@ export default function Dashboard() {
 
       {/* Metric Cards - 2 Cards side by side like screenshot */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
-        {/* Card 1: În lucru */}
+        {/* Card 1: In progress */}
         <div 
-          onClick={() => navigate('/dosare?status=in_lucru')}
+          onClick={() => navigate('/cases?status=in_progress')}
           className="p-6 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-blue-500/30 transition-all cursor-pointer group shadow-sm"
         >
           <div className="text-sm font-normal text-slate-400">
-            În lucru
+            In progress
           </div>
           <div className="text-4xl md:text-5xl font-bold text-[#2563eb] mt-3 group-hover:scale-105 transition-transform duration-200">
-            {loading && !stats ? '...' : (stats?.in_lucru ?? 24)}
+            {loading && !stats ? '...' : (stats?.in_progress ?? 24)}
           </div>
         </div>
 
-        {/* Card 2: De verificat */}
+        {/* Card 2: To verify */}
         <div 
-          onClick={() => navigate('/dosare?status=in_verificare')}
+          onClick={() => navigate('/cases?status=in_review')}
           className="p-6 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-amber-500/30 transition-all cursor-pointer group shadow-sm"
         >
           <div className="text-sm font-normal text-slate-400">
-            De verificat
+            To verify
           </div>
           <div className="text-4xl md:text-5xl font-bold text-[#d97706] mt-3 group-hover:scale-105 transition-transform duration-200">
-            {loading && !stats ? '...' : (stats?.de_verificat ?? 7)}
+            {loading && !stats ? '...' : (stats?.to_verify ?? 7)}
           </div>
         </div>
       </div>
 
-      {/* Section: Dosare recente */}
+      {/* Section: Recent Cases */}
       <div className="space-y-4 max-w-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white tracking-tight">
-            Dosare recente
+            Recent Cases
           </h2>
           <button
-            onClick={() => navigate('/dosare')}
-            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+            onClick={() => navigate('/cases')}
+            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors cursor-pointer"
           >
-            Vezi toate dosarele
+            View all cases
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -144,13 +144,13 @@ export default function Dashboard() {
         <div className="space-y-3">
           {loading && !stats ? (
             <div className="p-8 text-center text-slate-500 text-sm">
-              Se încarcă dosarele...
+              Loading cases...
             </div>
           ) : stats?.recent_cases && stats.recent_cases.length > 0 ? (
             stats.recent_cases.map((c) => (
               <div
                 key={c.id}
-                onClick={() => navigate(`/dosare/${c.id}`)}
+                onClick={() => navigate(`/cases/${c.id}`)}
                 className="p-4 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-[#1e3256] hover:bg-[#0c1428] transition-all cursor-pointer flex items-center justify-between group shadow-sm"
               >
                 <div className="flex items-center gap-4">
@@ -159,7 +159,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-white group-hover:text-blue-400 transition-colors">
-                      Dosar #{c.case_number}
+                      Case #{c.case_number}
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {c.title}
@@ -174,7 +174,7 @@ export default function Dashboard() {
             ))
           ) : (
             <div className="p-8 text-center text-slate-500 text-sm rounded-2xl bg-[#090f1e] border border-[#142036]">
-              Nu există dosare recente înregistrate.
+              No recent cases recorded.
             </div>
           )}
         </div>
@@ -182,4 +182,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
