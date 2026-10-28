@@ -14,41 +14,67 @@ import {
   Lock,
   Check,
   FileText,
-  Settings,
   Mail,
   MessageSquare,
   UserCheck,
   Zap,
   Maximize2,
-  Columns
+  Columns,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Layers,
+  Cpu
 } from 'lucide-react';
 import {
+  fetchCaseAgents,
+  runModularAgent,
   runCaseAnalysis,
   resolveFinding,
   sendRemediationNotification,
   submitHumanDecision
 } from '../api/client';
 
-const AGENT_PIPELINE_STEPS = [
+const DEFAULT_AGENT_CATALOG = [
   {
-    id: 'pii',
-    name: '1. PII Shield (GDPR)',
-    desc: 'National ID & IBAN Masking',
+    agentId: 'kyc_identity',
+    name: 'KYC & Identity Verification Agent',
+    shortLabel: 'KYC & Identity Audit',
+    color: 'blue',
+    description: 'Audits National ID validity, expiration dates, legal name consistency across documents, and residential address matching.',
+    isRecommended: true,
   },
   {
-    id: 'extract_policy',
-    name: '2. Extractor ∥ Policy',
-    desc: 'OCR JSON + Regulatory Rules',
+    agentId: 'income_crosscheck',
+    name: 'Income & Employer Cross-Check Agent',
+    shortLabel: 'Income Cross-Check',
+    color: 'amber',
+    description: 'Reconciles net monthly income and employer data across Application Forms, Salary Certificates, and Bank Statements.',
+    isRecommended: true,
   },
   {
-    id: 'investigator',
-    name: '3. Investigator & Math',
-    desc: 'Cross-Check + DTI 40% Python',
+    agentId: 'dti_affordability',
+    name: 'DTI & Interest Rate Stress-Test Agent',
+    shortLabel: 'DTI & Stress-Test',
+    color: 'emerald',
+    description: 'Executes deterministic Python annuity math, 40% regulatory DTI ceiling verification, and +2.0% interest rate shock simulation.',
+    isRecommended: true,
   },
   {
-    id: 'remediation',
-    name: '4. Remediation Agent',
-    desc: 'Automated SMS/Email & Checklist',
+    agentId: 'aml_fraud_risk',
+    name: 'AML & Fraud Anomaly Detector',
+    shortLabel: 'AML & Fraud Screening',
+    color: 'purple',
+    description: 'Screens account statements and applicant metadata for anti-money laundering (AML) flags, identity anomalies, and behavioral risks.',
+    isRecommended: true,
+  },
+  {
+    agentId: 'smart_remediation',
+    name: 'Client Remediation & Comms Agent',
+    shortLabel: 'Smart Remediation',
+    color: 'rose',
+    description: 'Drafts personalized customer SMS & Email notifications with encrypted document re-upload links via AWS Bedrock.',
+    isRecommended: true,
   },
 ];
 
@@ -63,13 +89,12 @@ export default function AICopilotDrawer({
   onSelectCitation
 }) {
   const [analysis, setAnalysis] = useState(initialAnalysis || null);
-  const [running, setRunning] = useState(false);
-  const [activePipelineStep, setActivePipelineStep] = useState(-1);
-  const [activeTab, setActiveTab] = useState('findings'); // findings, math, remediation, pii_data, trace
+  const [agentCatalog, setAgentCatalog] = useState(DEFAULT_AGENT_CATALOG);
+  const [runningAll, setRunningAll] = useState(false);
+  const [runningAgentId, setRunningAgentId] = useState(null);
+  const [expandedModules, setExpandedModules] = useState({});
+  const [activeTab, setActiveTab] = useState('modular_hub'); // modular_hub, findings, math, remediation, pii_data, trace
   const [showMaskedPii, setShowMaskedPii] = useState(true);
-  const [showEngineConfig, setShowEngineConfig] = useState(false);
-  const [llmProvider, setLlmProvider] = useState('auto');
-  const [apiKey, setApiKey] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [officerComment, setOfficerComment] = useState('');
   const [toastMsg, setToastMsg] = useState(null);
@@ -77,42 +102,83 @@ export default function AICopilotDrawer({
 
   useEffect(() => {
     setAnalysis(initialAnalysis || null);
+    if (initialAnalysis?.metrics?.modularResults) {
+      const autoExpand = {};
+      Object.keys(initialAnalysis.metrics.modularResults).forEach((k) => {
+        autoExpand[k] = true;
+      });
+      setExpandedModules((prev) => ({ ...autoExpand, ...prev }));
+    }
   }, [initialAnalysis, caseData?.id]);
+
+  useEffect(() => {
+    if (!caseData?.id) return;
+    fetchCaseAgents(caseData.id)
+      .then((data) => {
+        if (data?.agents?.length) {
+          setAgentCatalog(data.agents);
+        }
+      })
+      .catch((err) => console.error('Failed to load agent catalog:', err));
+  }, [caseData?.id]);
 
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  const handleRunAIReview = async () => {
-    if (!caseData) return;
+  // Run a single modular AI agent independently without conflicting with other agents
+  const handleRunSingleAgent = async (agentId) => {
+    if (!caseData || runningAgentId || runningAll) return;
     try {
-      setRunning(true);
-      setActivePipelineStep(0);
-
-      await new Promise((r) => setTimeout(r, 320));
-      setActivePipelineStep(1);
-      await new Promise((r) => setTimeout(r, 450));
-      setActivePipelineStep(2);
-
-      const res = await runCaseAnalysis(caseData.id, {
-        llmProvider,
-        apiKey: apiKey.trim() || undefined,
-      });
-
-      await new Promise((r) => setTimeout(r, 400));
-      setActivePipelineStep(3);
-      await new Promise((r) => setTimeout(r, 300));
-
-      setAnalysis(res);
-      setActivePipelineStep(4);
-      if (onAnalysisUpdated) onAnalysisUpdated(res);
-      showToast('Multi-Agent Analysis successfully completed!');
+      setRunningAgentId(agentId);
+      setActiveTab('modular_hub');
+      const updatedAnalysis = await runModularAgent(caseData.id, agentId);
+      setAnalysis(updatedAnalysis);
+      setExpandedModules((prev) => ({ ...prev, [agentId]: true }));
+      if (onAnalysisUpdated) onAnalysisUpdated(updatedAnalysis);
+      const agentMeta = agentCatalog.find((a) => a.agentId === agentId);
+      showToast(`${agentMeta?.shortLabel || agentId} completed via AWS Bedrock!`);
     } catch (err) {
       console.error(err);
-      showToast('Error executing AI analysis.');
+      showToast(`Error running agent module: ${agentId}`);
     } finally {
-      setRunning(false);
+      setRunningAgentId(null);
+    }
+  };
+
+  // Toggle expand/collapse of a modular analysis card; if not yet run, runs it automatically
+  const handleAgentButtonClick = (agentId) => {
+    const modularResults = analysis?.metrics?.modularResults || {};
+    if (!modularResults[agentId]) {
+      handleRunSingleAgent(agentId);
+    } else {
+      setActiveTab('modular_hub');
+      setExpandedModules((prev) => ({ ...prev, [agentId]: !prev[agentId] }));
+    }
+  };
+
+  // Run all agents in the suite
+  const handleRunAllAgents = async () => {
+    if (!caseData || runningAll || runningAgentId) return;
+    try {
+      setRunningAll(true);
+      const res = await runCaseAnalysis(caseData.id, {});
+      setAnalysis(res);
+      if (res?.metrics?.modularResults) {
+        const allOpen = {};
+        Object.keys(res.metrics.modularResults).forEach((k) => {
+          allOpen[k] = true;
+        });
+        setExpandedModules(allOpen);
+      }
+      if (onAnalysisUpdated) onAnalysisUpdated(res);
+      showToast('All Modular AI Agents executed successfully via AWS Bedrock!');
+    } catch (err) {
+      console.error(err);
+      showToast('Error executing full AI suite.');
+    } finally {
+      setRunningAll(false);
     }
   };
 
@@ -196,10 +262,12 @@ export default function AICopilotDrawer({
 
   const redFlags = analysis?.findings?.filter((f) => f.flagType === 'red_flag') || [];
   const greenFlags = analysis?.findings?.filter((f) => f.flagType === 'green_flag') || [];
+  const modularResults = analysis?.metrics?.modularResults || {};
+  const executedModulesCount = Object.keys(modularResults).length;
 
   return (
     <div className="w-full rounded-2xl bg-[#080f20] border-2 border-amber-400/40 shadow-[0_10px_50px_rgba(0,0,0,0.75)] overflow-hidden flex flex-col">
-      {/* Top Extension Header */}
+      {/* Top Extension Header (No manual API key input — uses backend AWS key automatically) */}
       <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-[#0e172c] via-[#131e38] to-[#1a1c2e] border-b border-[#223254] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-amber-500/20 shrink-0">
@@ -211,14 +279,18 @@ export default function AICopilotDrawer({
                 Raiffeisen AI Copilot
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                Triage & Audit Extension
+                Modular Multi-Agent Hub
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
-              <span>Case #{caseData?.case_number}</span>
+              <span>Case #{caseData?.case_number} ({caseData?.title})</span>
+              <span>•</span>
+              <span className="text-blue-400 flex items-center gap-1 font-medium">
+                <Cpu className="w-3 h-3" /> AWS Bedrock (Nova Pro)
+              </span>
               <span>•</span>
               <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                <Lock className="w-3 h-3" /> GDPR PII Shield Active
+                <Lock className="w-3 h-3" /> GDPR Shield Active
               </span>
             </p>
           </div>
@@ -226,12 +298,12 @@ export default function AICopilotDrawer({
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={handleRunAIReview}
-            disabled={running}
+            onClick={handleRunAllAgents}
+            disabled={runningAll || Boolean(runningAgentId)}
             className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
           >
-            <Play className={`w-3.5 h-3.5 fill-slate-950 ${running ? 'animate-pulse' : ''}`} />
-            <span>{running ? 'Agents Running...' : (analysis ? 'Re-run AI Review' : 'Run AI Review')}</span>
+            <Play className={`w-3.5 h-3.5 fill-slate-950 ${runningAll ? 'animate-spin' : ''}`} />
+            <span>{runningAll ? 'Running All Agents...' : 'Run Full Agent Suite'}</span>
           </button>
 
           {onToggleViewMode && (
@@ -255,14 +327,6 @@ export default function AICopilotDrawer({
           )}
 
           <button
-            onClick={() => setShowEngineConfig(!showEngineConfig)}
-            className="p-2 rounded-xl bg-[#091020] hover:bg-[#111e3b] border border-[#24375e] text-slate-300 hover:text-white transition-colors cursor-pointer"
-            title="Configure AI Engine / API Keys"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-
-          <button
             onClick={onClose}
             className="p-2 rounded-xl bg-[#091020] hover:bg-red-950/60 border border-[#24375e] hover:border-red-500/40 text-slate-300 hover:text-white transition-colors cursor-pointer"
             title="Close AI Copilot Extension"
@@ -272,37 +336,137 @@ export default function AICopilotDrawer({
         </div>
       </div>
 
-      {showEngineConfig && (
-        <div className="px-5 py-3.5 bg-[#050914] border-b border-[#192742] text-xs space-y-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold text-slate-200">
-              Multi-Agent Engine Configuration (Hybrid LLM + Deterministic):
-            </span>
-            <span className="text-[11px] text-emerald-400 font-mono">
-              ✓ Deterministic Fallback Active (100% Uptime)
-            </span>
+      {/* MODULAR AGENT SELECTOR BAR: Separate button for each type of analysis */}
+      <div className="px-4 sm:px-6 py-3.5 bg-[#060b17] border-b border-[#192848] space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+            <Layers className="w-4 h-4 text-amber-400" />
+            <span>Select Specialized AI Analysis Module (Independent & Conflict-Free):</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <select
-              value={llmProvider}
-              onChange={(e) => setLlmProvider(e.target.value)}
-              className="bg-[#0b1325] border border-[#1e3052] rounded-xl px-3 py-2 text-xs text-white"
-            >
-              <option value="auto">Auto (Hybrid LLM / Deterministic)</option>
-              <option value="openai">OpenAI GPT-4o + Python Math</option>
-              <option value="gemini">Google Gemini 2.0 + Python Math</option>
-              <option value="deterministic">Strict Deterministic (Offline Mode)</option>
-            </select>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Optional: API Key (OpenAI / Gemini)..."
-              className="sm:col-span-2 bg-[#0b1325] border border-[#1e3052] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500"
-            />
-          </div>
+          <span className="text-[11px] text-slate-400">
+            Case Type: <strong className="text-amber-300">{caseData?.case_type || caseData?.title}</strong>
+          </span>
         </div>
-      )}
+
+        <div
+          className={`grid gap-3 ${
+            viewMode === 'expanded'
+              ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
+              : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
+          }`}
+        >
+          {agentCatalog.map((agent) => {
+            const modResult = modularResults[agent.agentId];
+            const isRunningThis = runningAgentId === agent.agentId;
+            const isExpanded = Boolean(expandedModules[agent.agentId]);
+            const hasWarning =
+              modResult &&
+              (modResult.status === 'action_required' ||
+                modResult.status === 'needs_review' ||
+                modResult.status === 'critical');
+
+            return (
+              <div
+                key={agent.agentId}
+                className={`rounded-xl border p-3 flex flex-col justify-between transition-all min-w-0 overflow-hidden ${
+                  isRunningThis
+                    ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/40 animate-pulse'
+                    : modResult
+                    ? isExpanded
+                      ? 'bg-[#0f1d38] border-amber-400/60 shadow-md ring-1 ring-amber-400/30'
+                      : 'bg-[#0b1428] border-blue-500/40 hover:border-blue-400/60'
+                    : 'bg-[#091020] border-[#182744] hover:border-slate-600'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    {agent.isRecommended ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30 shrink-0">
+                        ★ Recommended
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 shrink-0">
+                        Optional Module
+                      </span>
+                    )}
+
+                    {modResult && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          hasWarning
+                            ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        }`}
+                      >
+                        {modResult.badgeText}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    className="text-xs sm:text-sm font-bold text-white leading-snug truncate"
+                    title={agent.shortLabel}
+                  >
+                    {agent.shortLabel}
+                  </div>
+                  <p
+                    className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-snug"
+                    title={agent.description}
+                  >
+                    {agent.description}
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleAgentButtonClick(agent.agentId)}
+                    disabled={isRunningThis || runningAll}
+                    className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer min-w-0 ${
+                      modResult
+                        ? isExpanded
+                          ? 'bg-amber-400 text-slate-950 font-bold hover:bg-amber-300 shadow'
+                          : 'bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm font-bold'
+                    }`}
+                  >
+                    {isRunningThis ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                        <span className="truncate">Running...</span>
+                      </>
+                    ) : modResult ? (
+                      <>
+                        {isExpanded ? (
+                          <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                        )}
+                        <span className="truncate">{isExpanded ? 'Hide Report' : 'Expand Report'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3 h-3 fill-current shrink-0" />
+                        <span className="truncate">Run Agent</span>
+                      </>
+                    )}
+                  </button>
+
+                  {modResult && (
+                    <button
+                      onClick={() => handleRunSingleAgent(agent.agentId)}
+                      disabled={isRunningThis || runningAll}
+                      title="Re-run this specific AI agent"
+                      className="p-1.5 rounded-lg bg-[#070c18] hover:bg-[#132242] border border-[#1f325a] hover:border-amber-400 text-slate-300 hover:text-amber-300 cursor-pointer shrink-0 transition-colors"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRunningThis ? 'animate-spin' : ''}`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {toastMsg && (
         <div className="mx-5 mt-4 px-4 py-3 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm font-medium flex items-center gap-2.5 shadow-lg">
@@ -311,34 +475,40 @@ export default function AICopilotDrawer({
         </div>
       )}
 
-      {(running || analysis) && (
-        <div className="px-4 sm:px-6 py-3 bg-[#091224] border-b border-[#162440]">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {AGENT_PIPELINE_STEPS.map((step, idx) => {
-              const isDone = !running && analysis ? true : activePipelineStep > idx;
-              const isCurrent = running && activePipelineStep === idx;
+      {/* INLINE DOCUMENT CITATION PREVIEW */}
+      {inlinePreviewDoc && (
+        <div className="mx-4 sm:mx-6 mt-4 p-4 rounded-2xl bg-[#050914] border-2 border-amber-400/60 shadow-xl space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
+              <FileText className="w-4 h-4 shrink-0" />
+              <span>Source Excerpt: {inlinePreviewDoc.doc.file_name}</span>
+              <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-mono text-xs">
+                Line {inlinePreviewDoc.lineNumber}
+              </span>
+            </div>
+            <button
+              onClick={() => setInlinePreviewDoc(null)}
+              className="text-slate-400 hover:text-white p-1 cursor-pointer"
+              title="Close inline preview"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="rounded-xl bg-[#080f1e] border border-[#192948] p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
+            {(inlinePreviewDoc.doc.content_text || '').split('\n').map((line, i) => {
+              const lNum = i + 1;
+              const isTarget = lNum === inlinePreviewDoc.lineNumber;
               return (
                 <div
-                  key={step.id}
-                  className={`px-3 py-2 rounded-xl border text-xs transition-all ${
-                    isCurrent
-                      ? 'bg-amber-500/15 border-amber-400 text-amber-200 animate-pulse'
-                      : isDone
-                      ? 'bg-[#0d1930] border-emerald-500/30 text-slate-200'
-                      : 'bg-[#060b16] border-[#142038] text-slate-500'
+                  key={lNum}
+                  className={`px-2.5 py-1 rounded flex items-start gap-2.5 ${
+                    isTarget
+                      ? 'bg-amber-400/25 border border-amber-400 text-amber-100 font-bold'
+                      : 'text-slate-400'
                   }`}
                 >
-                  <div className="flex items-center justify-between font-bold gap-1">
-                    <span className="truncate">{step.name}</span>
-                    {isDone ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    ) : isCurrent ? (
-                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    ) : null}
-                  </div>
-                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                    {step.desc}
-                  </p>
+                  <span className="w-5 text-right text-slate-500 select-none shrink-0">{lNum}</span>
+                  <span className="flex-1 break-words">{line}</span>
                 </div>
               );
             })}
@@ -346,107 +516,48 @@ export default function AICopilotDrawer({
         </div>
       )}
 
-      {!analysis && !running ? (
-        <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-5 min-h-[380px]">
-          <div className="w-16 h-16 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
-            <Sparkles className="w-8 h-8" />
+      {!analysis && !runningAll && !runningAgentId ? (
+        <div className="p-8 sm:p-10 flex flex-col items-center justify-center text-center space-y-4 min-h-[300px]">
+          <div className="w-14 h-14 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
+            <Sparkles className="w-7 h-7" />
           </div>
-          <div className="max-w-lg space-y-2">
-            <h3 className="text-lg font-bold text-white">
-              AI Copilot is Ready for Case #{caseData?.case_number}
+          <div className="max-w-lg space-y-1.5">
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              Modular AI Copilot Ready for Case #{caseData?.case_number}
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Press <strong>"Run AI Review"</strong> above to trigger the multi-agent team:
-              <strong> PII Shield (GDPR)</strong> → <strong>Extraction Agent (OCR)</strong> ∥ <strong>Policy Agent</strong> → <strong>Investigator Agent & Python Math</strong> → <strong>Remediation Agent</strong>.
+              Click any <strong>Specialized AI Analysis Button</strong> above to run only the module you need (e.g. <em>KYC Audit</em>, <em>Income Cross-Check</em>, <em>DTI Stress-Test</em>, <em>AML Screening</em>, or <em>Smart Remediation</em>), or run the full suite at once.
             </p>
           </div>
-          <button
-            onClick={handleRunAIReview}
-            className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-xl shadow-amber-500/20 transition-all cursor-pointer"
-          >
-            <Play className="w-4 h-4 fill-slate-950" />
-            <span>Launch Multi-Agent Triage (Run AI Review)</span>
-          </button>
         </div>
-      ) : running ? (
-        <div className="p-12 flex flex-col items-center justify-center text-center space-y-4 min-h-[380px]">
+      ) : runningAll ? (
+        <div className="p-12 flex flex-col items-center justify-center text-center space-y-4 min-h-[300px]">
           <div className="w-12 h-12 rounded-full border-3 border-amber-400 border-t-transparent animate-spin" />
           <div className="space-y-1">
             <p className="text-base font-bold text-white">
-              {AGENT_PIPELINE_STEPS[Math.min(activePipelineStep, 3)]?.name || 'Processing...'}
+              Executing Modular AI Agents on AWS Bedrock...
             </p>
             <p className="text-xs sm:text-sm text-slate-400">
-              {AGENT_PIPELINE_STEPS[Math.min(activePipelineStep, 3)]?.desc}
+              PII Anonymization Shield → OCR Line Extraction → Policy & Deterministic Math → Bedrock Nova Pro Synthesis
             </p>
           </div>
         </div>
       ) : (
         <div className="flex flex-col">
-          <div className="px-4 sm:px-6 py-3.5 bg-[#0b1528] border-b border-[#192947] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider shrink-0 mt-0.5 ${
-                  analysis.riskScore === 'critical'
-                    ? 'bg-red-950 text-red-400 border border-red-800'
-                    : analysis.riskScore === 'medium'
-                    ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                    : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                }`}
-              >
-                {analysis.riskScore} Risk
-              </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                {analysis.summary}
-              </p>
-            </div>
-            <div className="shrink-0">
-              <span className="inline-block text-xs px-2.5 py-1 rounded-lg bg-emerald-950/70 text-emerald-400 border border-emerald-800/60 font-mono font-semibold">
-                ROI: 45 min → {analysis.metrics?.aiProcessingSeconds || 2.4}s
-              </span>
-            </div>
-          </div>
-
-          {inlinePreviewDoc && (
-            <div className="mx-4 sm:mx-6 mt-4 p-4 rounded-2xl bg-[#050914] border-2 border-amber-400/60 shadow-xl space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span>Source Excerpt: {inlinePreviewDoc.doc.file_name}</span>
-                  <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-mono text-xs">
-                    Line {inlinePreviewDoc.lineNumber}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setInlinePreviewDoc(null)}
-                  className="text-slate-400 hover:text-white p-1 cursor-pointer"
-                  title="Close inline preview"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="rounded-xl bg-[#080f1e] border border-[#192948] p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
-                {(inlinePreviewDoc.doc.content_text || '').split('\n').map((line, i) => {
-                  const lNum = i + 1;
-                  const isTarget = lNum === inlinePreviewDoc.lineNumber;
-                  return (
-                    <div
-                      key={lNum}
-                      className={`px-2.5 py-1 rounded flex items-start gap-2.5 ${
-                        isTarget
-                          ? 'bg-amber-400/25 border border-amber-400 text-amber-100 font-bold'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      <span className="w-5 text-right text-slate-500 select-none shrink-0">{lNum}</span>
-                      <span className="flex-1 break-words">{line}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
+          {/* Navigation Bar between Modular Hub and Deep-Dive Views */}
           <div className="px-4 sm:px-6 pt-3 bg-[#070d1b] border-b border-[#16233d] flex items-center gap-1.5 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('modular_hub')}
+              className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
+                activeTab === 'modular_hub'
+                  ? 'border-amber-400 text-amber-300 bg-[#0e182e]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Modular Reports ({executedModulesCount})</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('findings')}
               className={`px-3.5 py-2.5 rounded-t-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-all shrink-0 cursor-pointer ${
@@ -456,7 +567,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <AlertTriangle className="w-4 h-4" />
-              <span>Audit & Findings</span>
+              <span>All Citations & Flags</span>
               {redFlags.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-xs bg-red-500/20 text-red-300 border border-red-500/40 font-bold">
                   {redFlags.length}
@@ -473,7 +584,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <Calculator className="w-4 h-4" />
-              <span>Python Math ({analysis.feasibilityMath?.dti_percentage}%)</span>
+              <span>Python Math ({analysis?.feasibilityMath?.dti_percentage}%)</span>
             </button>
 
             <button
@@ -485,10 +596,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <Send className="w-4 h-4" />
-              <span>Customer Remediation</span>
-              {analysis.remediation?.required && (
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-              )}
+              <span>Customer Outreach</span>
             </button>
 
             <button
@@ -500,7 +608,7 @@ export default function AICopilotDrawer({
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Data & GDPR</span>
+              <span>GDPR & OCR</span>
             </button>
 
             <button
@@ -512,11 +620,236 @@ export default function AICopilotDrawer({
               }`}
             >
               <Activity className="w-4 h-4" />
-              <span>Trace & Rules</span>
+              <span>Trace ({analysis?.executionTrace?.length || 0})</span>
             </button>
           </div>
 
           <div className="p-4 sm:p-6 space-y-4">
+            {/* TAB 0: EXPANDABLE MODULAR REPORTS HUB (NO CONFLICTS BETWEEN MODULES) */}
+            {activeTab === 'modular_hub' && (
+              <div className="space-y-4">
+                {executedModulesCount === 0 ? (
+                  <div className="p-6 rounded-2xl bg-[#0a1326] border border-[#1b2d50] text-center space-y-3">
+                    <p className="text-sm text-slate-300">
+                      Click any of the 5 modular agent buttons above to execute and expand its dedicated report.
+                    </p>
+                  </div>
+                ) : (
+                  agentCatalog.map((agent) => {
+                    const mod = modularResults[agent.agentId];
+                    if (!mod) return null;
+                    const isExpanded = Boolean(expandedModules[agent.agentId]);
+                    const isAlert = mod.status === 'action_required' || mod.status === 'needs_review' || mod.status === 'critical';
+
+                    return (
+                      <div
+                        key={agent.agentId}
+                        className={`rounded-2xl border transition-all overflow-hidden ${
+                          isAlert
+                            ? 'bg-[#140d18]/90 border-amber-500/45'
+                            : 'bg-[#0a1428] border-emerald-500/35'
+                        }`}
+                      >
+                        {/* Expandable Module Header */}
+                        <div
+                          onClick={() =>
+                            setExpandedModules((prev) => ({
+                              ...prev,
+                              [agent.agentId]: !prev[agent.agentId],
+                            }))
+                          }
+                          className="px-4 sm:px-5 py-3.5 bg-[#0d1830] border-b border-white/5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-[#122142] transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                isAlert
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              }`}
+                            >
+                              {mod.badgeText}
+                            </span>
+                            <h4 className="text-sm sm:text-base font-bold text-white">
+                              {mod.name}
+                            </h4>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] font-mono text-blue-300 hidden sm:inline">
+                              {mod.engineUsed}
+                            </span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-4 h-4 text-slate-300" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-slate-300" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expandable Module Body */}
+                        {isExpanded && (
+                          <div className="p-4 sm:p-5 space-y-4">
+                            {/* AWS Bedrock Executive Synthesis */}
+                            <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#1b2d52] space-y-1">
+                              <div className="flex items-center justify-between text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
+                                <span>AWS Bedrock Agent Assessment</span>
+                                <span className="font-mono text-slate-400">{mod.executedAt}</span>
+                              </div>
+                              <p className="text-xs sm:text-sm text-slate-100 leading-relaxed">
+                                {mod.aiNarrative}
+                              </p>
+                            </div>
+
+                            {/* Key Highlights Grid */}
+                            {mod.highlights && mod.highlights.length > 0 && (
+                              <div
+                                className={`grid gap-2.5 ${
+                                  viewMode === 'expanded'
+                                    ? 'grid-cols-2 sm:grid-cols-4'
+                                    : 'grid-cols-1 sm:grid-cols-2'
+                                }`}
+                              >
+                                {mod.highlights.map((h, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="p-3 rounded-xl bg-[#070d1b] border border-[#162442] text-xs min-w-0 overflow-hidden"
+                                  >
+                                    <span
+                                      className="text-slate-400 block text-[11px] font-medium truncate"
+                                      title={h.label}
+                                    >
+                                      {h.label}
+                                    </span>
+                                    <span
+                                      title={String(h.value)}
+                                      className={`font-bold text-xs sm:text-sm block mt-1 truncate ${
+                                        h.status === 'critical'
+                                          ? 'text-red-400'
+                                          : h.status === 'warning'
+                                          ? 'text-amber-300'
+                                          : 'text-emerald-300'
+                                      }`}
+                                    >
+                                      {h.value}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Module-Specific Findings & Interactive Citations */}
+                            {mod.findings && mod.findings.length > 0 && (
+                              <div className="space-y-2.5">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+                                  Document Citations & Interactive Resolution:
+                                </span>
+                                {mod.findings.map((f) => {
+                                  const isRed = f.flagType === 'red_flag';
+                                  const isResolved =
+                                    f.status === 'resolved_by_officer' || f.status === 'confirmed_by_officer';
+                                  return (
+                                    <div
+                                      key={f.id}
+                                      className={`p-3.5 rounded-xl border space-y-2.5 ${
+                                        isResolved
+                                          ? 'bg-[#0a1628] border-blue-500/40'
+                                          : isRed
+                                          ? 'bg-red-950/25 border-red-500/40'
+                                          : 'bg-emerald-950/20 border-emerald-500/30'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <span className="text-xs sm:text-sm font-bold text-white">
+                                          {f.title}
+                                        </span>
+                                        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300">
+                                          {f.ruleRef}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs text-slate-300">{f.description}</p>
+
+                                      {f.values && f.values.length > 0 && (
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                          {f.values.map((v, i) => (
+                                            <button
+                                              key={i}
+                                              onClick={() =>
+                                                handleCitationClick(v.documentId, v.lineNumber, v.quote)
+                                              }
+                                              className="w-full text-left p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#1a2b4c] hover:border-amber-400 flex items-center justify-between gap-2 text-xs cursor-pointer"
+                                            >
+                                              <div className="truncate">
+                                                <span className="font-semibold text-blue-300">
+                                                  {v.documentName} (Line {v.lineNumber}):
+                                                </span>{' '}
+                                                <span className="font-mono text-slate-300">"{v.quote}"</span>
+                                              </div>
+                                              <span className="text-amber-400 shrink-0 font-semibold flex items-center gap-1">
+                                                {v.formattedValue || v.value}{' '}
+                                                <ExternalLink className="w-3 h-3" />
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {isRed && f.selectableValues && f.selectableValues.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                                          {f.selectableValues.map((val, idx) => (
+                                            <button
+                                              key={idx}
+                                              disabled={actionLoading}
+                                              onClick={() =>
+                                                handleResolveFinding(f.id, 'override_value', val)
+                                              }
+                                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <Check className="w-3.5 h-3.5" />
+                                              <span>
+                                                Validate & Apply:{' '}
+                                                {typeof val === 'number'
+                                                  ? `€${val.toLocaleString('en-US')}`
+                                                  : val}
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Quick Action for Smart Remediation Module */}
+                            {agent.agentId === 'smart_remediation' && mod.remediation?.required && (
+                              <div className="p-3.5 rounded-xl bg-[#070d1b] border border-[#1b2e54] space-y-2.5">
+                                <div className="text-xs font-semibold text-amber-300">
+                                  Generated Email Preview ({mod.remediation.recipientEmail}):
+                                </div>
+                                <pre className="p-3 rounded-lg bg-[#050811] border border-[#15223c] text-xs text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
+                                  {mod.remediation.emailBody}
+                                </pre>
+                                <button
+                                  onClick={handleSendRemediation}
+                                  disabled={actionLoading}
+                                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>Dispatch SMS & Email with Secure Upload Link</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
             {/* TAB 1: AUDIT & FINDINGS */}
             {activeTab === 'findings' && (
               <div className="space-y-4">
@@ -529,7 +862,7 @@ export default function AICopilotDrawer({
                   </span>
                 </div>
 
-                {analysis.findings?.map((f) => {
+                {analysis?.findings?.map((f) => {
                   const isRed = f.flagType === 'red_flag';
                   const isResolved = f.status === 'resolved_by_officer' || f.status === 'confirmed_by_officer';
                   return (
@@ -647,7 +980,7 @@ export default function AICopilotDrawer({
             )}
 
             {/* TAB 2: PYTHON FINANCIAL MATH */}
-            {activeTab === 'math' && analysis.feasibilityMath && (
+            {activeTab === 'math' && analysis?.feasibilityMath && (
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-[#0c162c] border border-blue-500/30 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -735,34 +1068,12 @@ export default function AICopilotDrawer({
                       </span>
                     </div>
                   </div>
-
-                  {analysis.feasibilityMath.alternative_income_scenario && (
-                    <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs sm:text-sm space-y-2">
-                      <div className="font-semibold text-amber-300">
-                        Comparative Assessment Across Both Extracted Incomes:
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                        <div className="p-2.5 rounded-lg bg-[#060b16]">
-                          <span className="text-slate-400 block">Application Form Income (€5,200):</span>
-                          <strong className="text-white text-sm">
-                            DTI = {analysis.feasibilityMath.alternative_income_scenario.declared_dti_percent}% (Eligible)
-                          </strong>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-[#060b16]">
-                          <span className="text-slate-400 block">Employer Certificate Income (€5,700):</span>
-                          <strong className="text-emerald-400 text-sm">
-                            DTI = {analysis.feasibilityMath.alternative_income_scenario.verified_dti_percent}% (Eligible)
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
 
             {/* TAB 3: REMEDIATION AGENT */}
-            {activeTab === 'remediation' && analysis.remediation && (
+            {activeTab === 'remediation' && analysis?.remediation && (
               <div className="space-y-4">
                 <div className="p-5 rounded-2xl bg-[#0c162c] border border-[#1d3158] space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -816,11 +1127,6 @@ export default function AICopilotDrawer({
                           <Mail className="w-4 h-4" />
                           Official Email to {analysis.remediation.recipientEmail}
                         </span>
-                        {analysis.remediation.sentAt && (
-                          <span className="text-xs text-emerald-400 font-medium">
-                            Dispatched at: {analysis.remediation.sentAt}
-                          </span>
-                        )}
                       </div>
                       <div className="text-xs sm:text-sm font-semibold text-white">
                         Subject: {analysis.remediation.emailSubject}
@@ -836,12 +1142,7 @@ export default function AICopilotDrawer({
                       className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
-                      <span>
-                        {analysis.remediation.status === 'sent_automatically' ||
-                        analysis.remediation.status === 'sent_by_officer'
-                          ? 'Re-send SMS & Email with Secure Upload Link'
-                          : 'Dispatch SMS & Email with Secure Upload Link Now'}
-                      </span>
+                      <span>Dispatch SMS & Email with Secure Upload Link Now</span>
                     </button>
                   </>
                 )}
@@ -865,42 +1166,16 @@ export default function AICopilotDrawer({
                     </button>
                   </div>
                   <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                    {analysis.piiMasking?.explanation}
+                    {analysis?.piiMasking?.explanation}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {analysis.piiMasking?.tokens?.map((t, idx) => (
+                    {analysis?.piiMasking?.tokens?.map((t, idx) => (
                       <div key={idx} className="p-3 rounded-xl bg-[#060b16] border border-[#16233d] text-xs">
                         <span className="text-slate-400 block">{t.category}</span>
                         <span className="font-mono font-bold text-amber-300 text-sm block mt-1 break-all">
                           {showMaskedPii ? t.masked_token : t.original_preview}
                         </span>
                         <span className="text-[11px] text-emerald-400/80 block mt-1">{t.gdpr_article}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2.5">
-                  <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300">
-                    Structured Fields Extracted by Agent 1 (OCR & JSON Schema):
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2">
-                    {analysis.extractedFields?.map((item, i) => (
-                      <div
-                        key={i}
-                        onClick={() => handleCitationClick(item.documentId, item.lineNumber, item.quote)}
-                        className="p-3.5 rounded-xl bg-[#0a1224] border border-[#16233d] hover:border-amber-400/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer text-xs sm:text-sm"
-                      >
-                        <div>
-                          <span className="text-slate-400">{item.label}: </span>
-                          <strong className="text-white font-semibold">{String(item.value)}</strong>
-                          <div className="text-xs text-blue-400 mt-1">
-                            📄 {item.documentName} • Line {item.lineNumber}
-                          </div>
-                        </div>
-                        <span className="self-start sm:self-center px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-400 font-mono text-xs shrink-0">
-                          {Math.round((item.confidence || 0.99) * 100)}% confidence
-                        </span>
                       </div>
                     ))}
                   </div>
@@ -915,9 +1190,9 @@ export default function AICopilotDrawer({
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400">
                     Execution Trace (Technical Audit Trail):
                   </h4>
-                  {analysis.executionTrace?.map((step) => (
+                  {analysis?.executionTrace?.map((step, i) => (
                     <div
-                      key={step.step}
+                      key={i}
                       className="p-4 rounded-xl bg-[#0a1224] border border-[#192846] space-y-1.5 text-xs sm:text-sm"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -932,27 +1207,6 @@ export default function AICopilotDrawer({
                         Tool: {step.tool} ({step.executionMode})
                       </div>
                       <p className="text-slate-300">{step.outputSummary}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-2.5">
-                  <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-400">
-                    Banking Rules Identified by Policy Agent:
-                  </h4>
-                  {analysis.policyRules?.map((rule) => (
-                    <div
-                      key={rule.ruleId}
-                      className="p-4 rounded-xl bg-[#060b16] border border-[#16233d] space-y-1.5 text-xs sm:text-sm"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-bold text-white">{rule.title}</span>
-                        <span className="font-mono text-xs px-2.5 py-0.5 rounded bg-blue-950 text-blue-300">
-                          {rule.ruleId}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400">{rule.sourceDocument}</div>
-                      <p className="text-slate-300 italic mt-1">"{rule.excerpt}"</p>
                     </div>
                   ))}
                 </div>

@@ -113,6 +113,21 @@ export async function fetchHistory(caseId = null) {
 // RAIFFEISEN AI COPILOT (MULTI-AGENT EXTENSION) API CALLS
 // =========================================================
 
+export async function fetchCaseAgents(caseId) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/agents`);
+  if (!res.ok) throw new Error('Failed to load modular AI agent catalog');
+  return res.json();
+}
+
+export async function runModularAgent(caseId, agentId) {
+  const res = await fetch(`${API_BASE}/cases/${caseId}/agents/${agentId}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`Failed to execute modular AI agent: ${agentId}`);
+  return res.json();
+}
+
 export async function runCaseAnalysis(caseId, options = {}) {
   const res = await fetch(`${API_BASE}/cases/${caseId}/analysis`, {
     method: 'POST',

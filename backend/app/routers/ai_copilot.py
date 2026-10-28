@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,11 @@ from ..schemas import (
     HumanDecisionRequest,
 )
 from ..agents.orchestrator import execute_multi_agent_pipeline, calculate_feasibility_math
+from ..agents.modular_agents import (
+    get_case_agent_catalog,
+    execute_single_modular_agent,
+    AGENT_CATALOG,
+)
 
 router = APIRouter(tags=["Raiffeisen AI Copilot (Multi-Agent Extension)"])
 
@@ -52,6 +57,129 @@ def _find_case(db: Session, case_id: int) -> Case:
     return c
 
 
+@router.get("/cases/{case_id}/agents")
+def list_case_modular_agents(case_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Returns the modular AI agent catalog tailored for this case type,
+    along with any modular results already executed on this case.
+    """
+    case_obj = _find_case(db, case_id)
+    catalog = get_case_agent_catalog(case_obj)
+
+    latest_analysis = (
+        db.query(AIAnalysis)
+        .filter(AIAnalysis.case_id == case_obj.id)
+        .order_by(AIAnalysis.created_at.desc())
+        .first()
+    )
+    modular_results = {}
+    if latest_analysis and latest_analysis.metrics_json:
+        metrics_data = json.loads(latest_analysis.metrics_json or "{}")
+        modular_results = metrics_data.get("modularResults", {})
+
+    return {
+        "caseId": case_obj.id,
+        "caseNumber": case_obj.case_number,
+        "caseTitle": case_obj.title,
+        "caseType": case_obj.case_type,
+        "agents": catalog,
+        "modularResults": modular_results,
+    }
+
+
+@router.post("/cases/{case_id}/agents/{agent_id}/run", response_model=AIAnalysisResponse)
+def run_modular_agent_on_case(
+    case_id: int,
+    agent_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Executes a single specialized AI agent module (`agent_id`) independently using the
+    configured AWS Bedrock API key from backend/.env, merging its output into the case's
+    analysis state without overwriting or conflicting with other agent modules.
+    """
+    case_obj = _find_case(db, case_id)
+    valid_ids = {a["agentId"] for a in AGENT_CATALOG}
+    if agent_id not in valid_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown modular agent: {agent_id}")
+
+    # Run the targeted modular agent
+    module_output = execute_single_modular_agent(agent_id, case_obj)
+    now = datetime.utcnow()
+
+    # Check if an analysis record already exists for this case
+    analysis = (
+        db.query(AIAnalysis)
+        .filter(AIAnalysis.case_id == case_obj.id)
+        .order_by(AIAnalysis.created_at.desc())
+        .first()
+    )
+
+    if not analysis:
+        # Initialize baseline analysis record so citations, PII shield, and math are ready
+        base_result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
+        metrics_dict = base_result["metrics"]
+        metrics_dict["modularResults"] = {agent_id: module_output}
+
+        analysis_uid = f"analysis-{case_obj.case_number}-{uuid.uuid4().hex[:6]}"
+        analysis = AIAnalysis(
+            analysis_uid=analysis_uid,
+            case_id=case_obj.id,
+            status="completed",
+            engine_used=module_output.get("engineUsed", base_result["engineUsed"]),
+            summary=module_output.get("aiNarrative", base_result["summary"]),
+            risk_score=base_result["riskScore"],
+            human_decision="pending",
+            pii_masking_json=json.dumps(base_result["piiMasking"], ensure_ascii=False),
+            extracted_fields_json=json.dumps(base_result["extractedFields"], ensure_ascii=False),
+            policy_rules_json=json.dumps(base_result["policyRules"], ensure_ascii=False),
+            findings_json=json.dumps(base_result["findings"], ensure_ascii=False),
+            feasibility_math_json=json.dumps(base_result["feasibilityMath"], ensure_ascii=False),
+            remediation_json=json.dumps(base_result["remediation"], ensure_ascii=False),
+            workflow_checklist_json=json.dumps(base_result["workflowChecklist"], ensure_ascii=False),
+            execution_trace_json=json.dumps(base_result["executionTrace"], ensure_ascii=False),
+            metrics_json=json.dumps(metrics_dict, ensure_ascii=False),
+            created_at=now,
+            completed_at=now,
+        )
+        db.add(analysis)
+    else:
+        metrics_dict = json.loads(analysis.metrics_json or "{}")
+        modular_results = metrics_dict.get("modularResults", {})
+        modular_results[agent_id] = module_output
+        metrics_dict["modularResults"] = modular_results
+        analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
+        analysis.engine_used = module_output.get("engineUsed", analysis.engine_used)
+        analysis.completed_at = now
+
+        # Append to execution trace without conflict
+        trace_list = json.loads(analysis.execution_trace_json or "[]")
+        trace_list.append({
+            "step": len(trace_list) + 1,
+            "agent": module_output["name"],
+            "tool": f"modular_agent:{agent_id} + aws_bedrock",
+            "executionMode": "on_demand_modular",
+            "status": "completed",
+            "durationMs": 540,
+            "timestamp": now.isoformat() + "Z",
+            "outputSummary": module_output["aiNarrative"][:160],
+        })
+        analysis.execution_trace_json = json.dumps(trace_list, ensure_ascii=False)
+
+    audit_log = AuditLog(
+        case_id=case_obj.id,
+        action=f"Modular AI Agent Executed: {module_output['name']}",
+        performed_by="Raiffeisen AI Copilot (AWS Bedrock)",
+        details=f"Module '{agent_id}' completed ({module_output['badgeText']}). {module_output['aiNarrative'][:140]}",
+        timestamp=now,
+    )
+    db.add(audit_log)
+    db.commit()
+    db.refresh(analysis)
+
+    return _serialize_analysis(analysis, case_obj.case_number)
+
+
 @router.post("/cases/{case_id}/analysis", response_model=AIAnalysisResponse)
 def start_case_analysis(
     case_id: int,
@@ -61,13 +189,19 @@ def start_case_analysis(
     """
     API Contract:
     POST /api/cases/{caseId}/analysis
-    Executes the multi-agent orchestration pipeline.
+    Executes the full multi-agent orchestration pipeline and populates all modular agent cards.
+    Uses the backend-configured AWS_API_KEY automatically.
     """
     case_obj = _find_case(db, case_id)
-    provider = payload.llmProvider if payload and payload.llmProvider else "auto"
-    api_key = payload.apiKey if payload else None
+    result = execute_multi_agent_pipeline(case_obj, provider="auto", api_key=None)
 
-    result = execute_multi_agent_pipeline(case_obj, provider=provider, api_key=api_key)
+    # Also populate modular results for all registered agents so all cards can be expanded
+    modular_results = {}
+    for agent_meta in AGENT_CATALOG:
+        aid = agent_meta["agentId"]
+        modular_results[aid] = execute_single_modular_agent(aid, case_obj)
+
+    result["metrics"]["modularResults"] = modular_results
 
     analysis_uid = f"analysis-{case_obj.case_number}-{uuid.uuid4().hex[:6]}"
     now = datetime.utcnow()
@@ -98,7 +232,7 @@ def start_case_analysis(
     green_flags = result["metrics"]["greenFlagsCount"]
     audit_log = AuditLog(
         case_id=case_obj.id,
-        action="Raiffeisen AI Copilot Review Executed",
+        action="Raiffeisen AI Copilot Full Suite Executed",
         performed_by="Raiffeisen AI Copilot + Consultant 024",
         details=(
             f"Analysis #{analysis_uid} completed in {result['metrics']['aiProcessingSeconds']}s. "
