@@ -143,9 +143,9 @@ export default function ClientsList() {
               </div>
 
               <div className="pt-3 border-t border-[#142036] flex items-center justify-between text-xs">
-                <span className="text-slate-400">Declared net income:</span>
+                <span className="text-slate-400">Legacy income (currency unspecified):</span>
                 <span className="font-semibold text-emerald-400 font-mono">
-                  {c.monthly_income?.toLocaleString()} RON
+                  {c.monthly_income?.toLocaleString()}
                 </span>
               </div>
               <Link to={`/clients/${c.id}/finances`} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-sm text-blue-300 hover:bg-blue-500/20 transition-colors">

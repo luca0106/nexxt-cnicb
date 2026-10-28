@@ -33,7 +33,11 @@ BankDesk este o aplicație demo pentru gestionarea clienților și dosarelor ban
 - Totalul cheltuielilor din UI include `declared` și `confirmed`; `suspected` este afișat separat, iar `dismissed` este exclus.
 - Ratele creditelor `active` și `overdue` intră în totalul plăților; creditele `paid_off` sunt excluse.
 - `PUT /api/clients/{id}/financial-profile` înlocuiește profilul și listele de cheltuieli/credite. Listele omise devin goale.
-- Salvarea setează `is_demo=false`; acest câmp nu certifică autenticitatea datelor.
+- Salvarea setează `is_demo=false`; `source_kind` păstrează originea. Profilurile vechi deja editate pot avea origine `unknown`.
+- Actualizarea unui profil existent cere `expected_version`: 428 dacă lipsește, 409 dacă este depășită. Păstrează editările în UI la erori.
+- Nu schimba moneda unui profil existent prin relabelare; API-ul blochează operația până există un flux explicit de conversie.
+- Creditele `paid_off` au sold, rată și termen rămase zero (termenul poate lipsi).
+- Migrațiile ordonate sunt în `backend/app/migrations`; nu modifica o versiune deja livrată, adaugă o versiune nouă.
 - Profilul financiar nu sincronizează automat venitul/datoriile vechi din `clients` și nu modifică deciziile copilotului.
 - Nu șterge baza de date pentru a rezolva incompatibilități de schemă. Păstrează datele la migrare.
 
@@ -59,6 +63,10 @@ Verificări relevante, fiecare pornită din rădăcină:
 ```bash
 (cd backend && ../venv/bin/python -m unittest discover -s tests -v)
 (cd frontend && npm run build)
+(cd frontend && npm test)
+(cd frontend && npm run test:e2e)
+# Opțional, dacă sunt disponibile binarele PostgreSQL:
+bash scripts/test-postgres.sh
 git diff --check
 ```
 

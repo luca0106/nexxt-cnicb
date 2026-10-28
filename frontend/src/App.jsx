@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import CasesList from './pages/CasesList';
@@ -10,10 +10,7 @@ import DocumentsList from './pages/DocumentsList';
 import TasksList from './pages/TasksList';
 import HistoryList from './pages/HistoryList';
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
+const router = createBrowserRouter(createRoutesFromElements(
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           {/* Primary English routes */}
@@ -35,9 +32,10 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-      </Routes>
-    </BrowserRouter>
-  );
+));
+
+export default function App() {
+  return <RouterProvider router={router} />;
 }
 
 function CasesListWrapper() {

@@ -161,6 +161,7 @@ export async function submitHumanDecision(analysisId, payload) {
 
 export async function fetchClientById(id, signal) {
   const res = await fetch(`${API_BASE}/clients/${id}`, { signal });
+  if (res.status === 401 || res.status === 403) throw new Error('Access denied or session expired. Sign in again before retrying.');
   if (!res.ok) throw new Error('Could not load this client.');
   return res.json();
 }
@@ -168,6 +169,7 @@ export async function fetchClientById(id, signal) {
 export async function fetchFinancialProfile(id, signal) {
   const res = await fetch(`${API_BASE}/clients/${id}/financial-profile`, { signal });
   if (res.status === 404) return null;
+  if (res.status === 401 || res.status === 403) throw new Error('Access denied or session expired. Sign in again before retrying.');
   if (!res.ok) throw new Error('Could not load the financial profile. Please retry.');
   return res.json();
 }
@@ -176,6 +178,7 @@ export async function saveFinancialProfile(id, data) {
   const res = await fetch(`${API_BASE}/clients/${id}/financial-profile`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   });
+  if (res.status === 401 || res.status === 403) throw new Error('Access denied or session expired. Sign in again before retrying.');
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const detail = Array.isArray(body.detail)

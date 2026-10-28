@@ -18,7 +18,7 @@ def seed_financial_profiles(db):
         profile = FinancialProfile(
             client_id=client.id, monthly_salary=salary, other_monthly_income=0,
             currency='EUR', marital_status=marital, number_of_children=children,
-            as_of_date=date(2026, 10, 28), is_demo=True,
+            as_of_date=date(2026, 10, 28), is_demo=True, source_kind="synthetic",
         )
         profile.expenses = [
             ClientExpense(category=category, monthly_amount=amount, verification_status='declared',
@@ -49,7 +49,7 @@ def seed_financial_profiles(db):
             client_id=client.id, monthly_salary=salary,
             other_monthly_income=rng.choice([0, 0, 0, 150, 250, 400]),
             currency='EUR', marital_status=marital, number_of_children=children,
-            as_of_date=date(2026, 10, 28), is_demo=True,
+            as_of_date=date(2026, 10, 28), is_demo=True, source_kind="synthetic",
         )
         def expense(category, amount, status='declared'):
             return ClientExpense(category=category, monthly_amount=amount,

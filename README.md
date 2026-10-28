@@ -148,3 +148,46 @@ outgoings. Add or remove entries, then select **Save financial profile**.
 
 Run financial persistence and validation checks from `backend`:
 `../venv/bin/python -m unittest discover -s tests -v`.
+
+### Financial profile safeguards and verification
+
+Responses now include `version` and `source_kind`. To update an existing profile,
+include `expected_version` with the version returned by GET. Missing versions return
+428; stale versions return 409. Use `expected_version: 0` when creating a profile to
+prevent overwriting a profile created elsewhere. Reload explicitly after a conflict;
+the editor retains unsaved values on errors.
+
+`source_kind` preserves the profile's origin (`synthetic`, `user_supplied`, `imported`,
+or `unknown`). Editing a synthetic profile keeps that origin while setting
+`is_demo=false`. Old profiles already edited before this migration have unknown
+origin, because the previous schema did not retain it. Pre-edit and saved snapshots
+are stored in `financial_profile_revisions`; this is an application history, not an
+authenticated or tamper-proof audit service.
+
+Existing currencies cannot be changed through PUT (409). New profiles require the
+user to choose a currency in the UI and do not copy income from legacy fields with
+unspecified currency. Paid-off loans must have zero balance, monthly payment and
+remaining term (or no term). `confirmed` is the canonical verified expense status;
+`verified` is not accepted for financial expenses.
+
+Schema initialization runs ordered additive migrations from `backend/app/migrations`
+and records them in `schema_migrations`. Startup still creates missing tables.
+The third migration adds missing client/case detail columns to older databases,
+leaving historical values unknown (NULL). This runner does not provide rollback
+migrations or coordinate simultaneous deploys.
+
+Additional checks, from the repository root:
+
+```bash
+(cd frontend && npm test)
+# First-time browser setup, if Chromium is not installed:
+(cd frontend && npx playwright install chromium)
+(cd frontend && npm run test:e2e)
+# Requires local PostgreSQL server binaries and pg_config; uses a temporary cluster:
+bash scripts/test-postgres.sh
+```
+
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to use an existing Chromium binary. Browser tests
+start isolated API/Vite servers on ports 8018/5189 and use a temporary SQLite database;
+they do not use the application's local database. Screenshots and failure traces are
+written to `frontend/test-results/`. PostgreSQL checks use unique disposable schemas.

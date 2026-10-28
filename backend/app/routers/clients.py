@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from sqlalchemy.orm.exc import StaleDataError
+from sqlalchemy.exc import IntegrityError
 
 from ..database import get_db
-from ..models import Client, FinancialProfile, ClientExpense, ClientCredit
+from ..models import Client, FinancialProfile, ClientExpense, ClientCredit, FinancialProfileRevision
 from ..financial_schemas import FinancialProfileInput, FinancialProfileOut
 from ..schemas import ClientOut, ClientCreate
 
@@ -78,15 +80,34 @@ def replace_financial_profile(client_id: int, payload: FinancialProfileInput, db
     if db.get(Client, client_id) is None:
         raise HTTPException(status_code=404, detail='Client not found.')
     profile = db.get(FinancialProfile, client_id)
+    if payload.expected_version is not None and payload.expected_version != (profile.version if profile else 0):
+        raise HTTPException(status_code=409, detail='This profile was changed elsewhere. Reload before saving.')
+    if profile is not None and profile.currency != payload.currency:
+        raise HTTPException(status_code=409, detail='Currency changes are blocked. A conversion workflow is required.')
+    if profile is not None and payload.expected_version is None:
+        raise HTTPException(status_code=428, detail='expected_version is required when updating an existing profile. Reload before saving.')
     if profile is None:
-        profile = FinancialProfile(client_id=client_id)
+        profile = FinancialProfile(client_id=client_id, source_kind='user_supplied')
         db.add(profile)
-    for key, value in payload.model_dump(exclude={'expenses', 'credits'}).items():
+    else:
+        # Preserve the pre-edit snapshot, including old seeded values.
+        db.add(FinancialProfileRevision(client_id=client_id, version=profile.version,
+               snapshot_json=FinancialProfileOut.model_validate(profile).model_dump_json(),
+               edit_kind='snapshot'))
+    for key, value in payload.model_dump(exclude={'expenses', 'credits', 'expected_version'}).items():
         setattr(profile, key, value)
     profile.is_demo = False
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = datetime.now(timezone.utc)
     profile.expenses = [ClientExpense(**item.model_dump()) for item in payload.expenses]
     profile.credits = [ClientCredit(**item.model_dump()) for item in payload.credits]
-    db.commit()
+    try:
+        db.flush()
+        db.add(FinancialProfileRevision(client_id=client_id, version=profile.version,
+               snapshot_json=FinancialProfileOut.model_validate(profile).model_dump_json(),
+               edit_kind='user_supplied'))
+        db.commit()
+    except (StaleDataError, IntegrityError):
+        db.rollback()
+        raise HTTPException(status_code=409, detail='This profile was changed elsewhere. Reload before saving.')
     db.refresh(profile)
     return profile

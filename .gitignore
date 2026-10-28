@@ -48,3 +48,7 @@ yarn-error.log*
 # Docker volume
 pgdata/
 
+
+# Browser test artifacts
+frontend/test-results/
+frontend/playwright-report/

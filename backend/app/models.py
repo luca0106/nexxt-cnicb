@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, Text, DateTime, ForeignKey, Boolean, Numeric, Date
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -34,7 +34,7 @@ class Client(Base):
     aml_status = Column(String(100), default="Compliant L129/2019 — No Alerts")
     anaf_consent = Column(Boolean, default=True)
     anaf_income = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     cases = relationship("Case", back_populates="client", cascade="all, delete-orphan")
 
@@ -62,8 +62,8 @@ class Case(Base):
     currency = Column(String(10), default="EUR")
     notes = Column(Text, nullable=True)
     scenario_tag = Column(String(100), nullable=True)  # discrepancy_case, expired_id_case, valid_green_case
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     client = relationship("Client", back_populates="cases")
@@ -86,7 +86,7 @@ class Document(Base):
     page_count = Column(Integer, default=1)
     content_text = Column(Text, nullable=True)
     status = Column(String(50), default="uploaded")  # uploaded, verified, flagged, expired
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case = relationship("Case", back_populates="documents")
 
@@ -101,7 +101,7 @@ class Task(Base):
     priority = Column(String(50), default="normal")
     assigned_to = Column(String(100), default="Consultant 024")
     due_date = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case = relationship("Case", back_populates="tasks")
 
@@ -114,7 +114,7 @@ class AuditLog(Base):
     action = Column(String(150), nullable=False)
     performed_by = Column(String(100), default="Consultant 024")
     details = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case = relationship("Case", back_populates="history_entries")
 
@@ -142,8 +142,8 @@ class AIAnalysis(Base):
     execution_trace_json = Column(Text, nullable=True)
     metrics_json = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     case = relationship("Case", back_populates="ai_analyses")
 
@@ -160,7 +160,10 @@ class FinancialProfile(Base):
     number_of_children = Column(Integer, nullable=False, default=0)
     as_of_date = Column(Date, nullable=False)
     is_demo = Column(Boolean, nullable=False, default=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    source_kind = Column(String(20), nullable=False, default="user_supplied")
+    version = Column(Integer, nullable=False, default=1)
+    __mapper_args__ = {"version_id_col": version}
     expenses = relationship("ClientExpense", cascade="all, delete-orphan", order_by="ClientExpense.id")
     credits = relationship("ClientCredit", cascade="all, delete-orphan", order_by="ClientCredit.id")
 
@@ -189,3 +192,14 @@ class ClientCredit(Base):
     interest_rate_annual = Column(Numeric(7, 4), nullable=True)
     remaining_term_months = Column(Integer, nullable=True)
     status = Column(String(20), nullable=False, default="active")
+
+
+class FinancialProfileRevision(Base):
+    __tablename__ = "financial_profile_revisions"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    snapshot_json = Column(Text, nullable=False)
+    edit_kind = Column(String(20), nullable=False, default="user_supplied")
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))

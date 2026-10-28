@@ -56,7 +56,8 @@ export default function Header({ onToggleMobileMenu, isSidebarCollapsed, onToggl
             <User className="w-3.5 h-3.5" />
           </div>
           <span className="font-medium whitespace-nowrap">
-            <span className="hidden sm:inline">User: </span>Consultant 024
+            <span className="hidden sm:inline">User: Consultant 024</span>
+            <span className="sm:hidden" aria-label="Consultant 024">024</span>
           </span>
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Active"></span>
         </div>

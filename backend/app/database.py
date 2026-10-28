@@ -23,13 +23,9 @@ def get_db():
 
 
 
-def initialize_database():
-    """Preserve IDs when opening databases created before the national_id rename."""
-    from sqlalchemy import inspect, text
-    inspector = inspect(engine)
-    if inspector.has_table('clients'):
-        columns = {column['name'] for column in inspector.get_columns('clients')}
-        if 'cnp' in columns and 'national_id' not in columns:
-            with engine.begin() as connection:
-                connection.execute(text('ALTER TABLE clients RENAME COLUMN cnp TO national_id'))
-    Base.metadata.create_all(bind=engine)
+def initialize_database(bind=None):
+    from .migrations import migrate
+    target = bind if bind is not None else engine
+    with target.begin() as connection:
+        migrate(connection)
+        Base.metadata.create_all(bind=connection)
