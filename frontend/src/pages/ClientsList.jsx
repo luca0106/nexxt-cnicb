@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { Users, Search, Plus, Phone, Mail, Building, CreditCard, X } from 'lucide-react';
 import { fetchClients, createClient } from '../api/client';
@@ -147,6 +148,9 @@ export default function ClientsList() {
                   {c.monthly_income?.toLocaleString()} RON
                 </span>
               </div>
+              <Link to={`/clients/${c.id}/finances`} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-sm text-blue-300 hover:bg-blue-500/20 transition-colors">
+                <CreditCard className="w-4 h-4" /> Financial profile
+              </Link>
             </div>
           ))}
         </div>

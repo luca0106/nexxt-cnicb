@@ -5,7 +5,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from ..database import get_db
-from ..models import Client
+from ..models import Client, FinancialProfile, ClientExpense, ClientCredit
+from ..financial_schemas import FinancialProfileInput, FinancialProfileOut
 from ..schemas import ClientOut, ClientCreate
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
@@ -62,3 +63,30 @@ def create_client(payload: ClientCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(client)
     return client
+
+
+@router.get('/{client_id}/financial-profile', response_model=FinancialProfileOut)
+def get_financial_profile(client_id: int, db: Session = Depends(get_db)):
+    profile = db.get(FinancialProfile, client_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail='Financial profile not found.')
+    return profile
+
+
+@router.put('/{client_id}/financial-profile', response_model=FinancialProfileOut)
+def replace_financial_profile(client_id: int, payload: FinancialProfileInput, db: Session = Depends(get_db)):
+    if db.get(Client, client_id) is None:
+        raise HTTPException(status_code=404, detail='Client not found.')
+    profile = db.get(FinancialProfile, client_id)
+    if profile is None:
+        profile = FinancialProfile(client_id=client_id)
+        db.add(profile)
+    for key, value in payload.model_dump(exclude={'expenses', 'credits'}).items():
+        setattr(profile, key, value)
+    profile.is_demo = False
+    profile.updated_at = datetime.utcnow()
+    profile.expenses = [ClientExpense(**item.model_dump()) for item in payload.expenses]
+    profile.credits = [ClientCredit(**item.model_dump()) for item in payload.credits]
+    db.commit()
+    db.refresh(profile)
+    return profile

@@ -99,3 +99,49 @@ docker compose up --build
 - `PATCH /api/analyses/{analysisId}/findings/{findingId}` — Officer review on a finding (recalculate DTI deterministically).
 - `POST /api/analyses/{analysisId}/remediation/send` — Dispatch automated SMS/Email remediation notice.
 - `POST /api/analyses/{analysisId}/human-decision` — Record final human-in-the-loop underwriting decision in the regulatory audit trail.
+
+## Client financial database
+
+The database includes `financial_profiles`, `client_expenses`, and `client_credits`,
+linked by client ID. Start the backend normally or run `cd backend && python -m app.seed`
+to initialize tables and add realistic synthetic financial profiles for all 33 built-in demo
+client IDs. Initialization preserves existing records and handles the older `cnp`
+column name. Demo seeding never overwrites an existing financial profile.
+
+- `GET /api/clients/{client_id}/financial-profile` reads a profile (404 if absent).
+- `PUT /api/clients/{client_id}/financial-profile` creates or replaces the full profile,
+  including its expense and credit lists. Omitted lists become empty.
+
+Example PUT body:
+
+```json
+{
+  "monthly_salary": "5200.00",
+  "other_monthly_income": "200.00",
+  "currency": "EUR",
+  "marital_status": "married",
+  "number_of_children": 2,
+  "as_of_date": "2026-10-28",
+  "expenses": [
+    {"category": "housing", "monthly_amount": "1000.00", "verification_status": "declared"},
+    {"category": "sports_betting", "monthly_amount": "180.00", "verification_status": "suspected", "evidence_note": "Merchant category requires verification"}
+  ],
+  "credits": [
+    {"lender": "Example Bank", "credit_type": "personal_loan", "original_amount": "20000.00", "remaining_balance": "12000.00", "monthly_payment": "350.00", "remaining_term_months": 36, "interest_rate_annual": "8.5", "status": "active"}
+  ]
+}
+```
+
+Amounts use fixed precision decimals and the profile's currency. Salary is net monthly
+salary; expenses are monthly amounts or estimates as of the supplied date. Suspected
+expenses remain explicitly unverified; `dismissed` is available for rejected signals.
+Profiles carry an `is_demo` flag; submitting a PUT marks the profile as user supplied.
+Financial profiles are separate snapshots and do not automatically overwrite the
+legacy client income/debt fields or change AI underwriting decisions.
+
+Open **Clients → Financial profile** to view or edit income, household details,
+monthly expenses and loans. Summary cards separate suspected expenses from recorded
+outgoings. Add or remove entries, then select **Save financial profile**.
+
+Run financial persistence and validation checks from `backend`:
+`../venv/bin/python -m unittest discover -s tests -v`.

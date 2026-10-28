@@ -532,10 +532,12 @@ def seed_database(db: Session):
 
 
 if __name__ == "__main__":
-    from .database import engine, Base, SessionLocal
-    Base.metadata.create_all(bind=engine)
+    from .database import engine, Base, SessionLocal, initialize_database
+    initialize_database()
     db = SessionLocal()
     try:
         seed_database(db)
+        from .financial_seed import seed_financial_profiles
+        seed_financial_profiles(db)
     finally:
         db.close()

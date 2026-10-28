@@ -3,17 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .config import settings
-from .database import engine, Base, SessionLocal
+from .database import engine, Base, SessionLocal, initialize_database
 from .seed import seed_database
+from .financial_seed import seed_financial_profiles
 from .routers import dashboard, cases, clients, documents, tasks, history, ai_copilot
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    initialize_database()
     db = SessionLocal()
     try:
         seed_database(db)
+        seed_financial_profiles(db)
     finally:
         db.close()
     yield
