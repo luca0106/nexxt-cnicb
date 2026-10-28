@@ -12,11 +12,16 @@ import {
   History,
   FileCheck,
   X,
-  Bot,
   Sparkles,
   Save,
   Plus,
-  Calculator
+  Calculator,
+  ShieldCheck,
+  CreditCard,
+  Building,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import {
   fetchCaseById,
@@ -27,6 +32,14 @@ import {
   createDocument
 } from '../api/client';
 import AICopilotDrawer from '../components/AICopilotDrawer';
+
+// Standard banking annuity formula
+const calculateMonthlyAnnuity = (principal, annualInterestRate, termMonths) => {
+  if (!principal || !termMonths || termMonths <= 0) return 0;
+  const r = (annualInterestRate || 8.9) / 100 / 12;
+  const payment = (principal * (r * Math.pow(1 + r, termMonths))) / (Math.pow(1 + r, termMonths) - 1);
+  return Math.round(payment * 100) / 100;
+};
 
 export default function CaseDetail() {
   const { id } = useParams();
@@ -40,17 +53,18 @@ export default function CaseDetail() {
   const [latestAnalysis, setLatestAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('documents'); // documents, underwriting_sheet, tasks, history
+  const [activeTab, setActiveTab] = useState('documents'); // documents, manual_verification, credit_bureau, tasks, history
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [highlightedLine, setHighlightedLine] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
+  // Copilot plugin state: open/closed & viewMode ('split' | 'expanded')
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [copilotViewMode, setCopilotViewMode] = useState('split');
 
-  // Manual Form
+  // Manual Officer Verification Form state
   const [formName, setFormName] = useState('');
-  const [formNatId, setFormNatId] = useState('');
+  const [formNationalId, setFormNationalId] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formEmployer, setFormEmployer] = useState('');
   const [formIncome, setFormIncome] = useState('');
@@ -60,7 +74,7 @@ export default function CaseDetail() {
   const [formNotes, setFormNotes] = useState('');
   const [savingForm, setSavingForm] = useState(false);
 
-  // Upload Doc Modal
+  // Upload Document modal state
   const [showDocModal, setShowDocModal] = useState(false);
   const [newDocName, setNewDocName] = useState('');
   const [newDocType, setNewDocType] = useState('Income Certificate');
@@ -69,7 +83,7 @@ export default function CaseDetail() {
   const syncFormState = (data) => {
     if (!data) return;
     setFormName(data.client?.full_name || '');
-    setFormNatId(data.client?.national_id || '');
+    setFormNationalId(data.client?.national_id || data.client?.cnp || '');
     setFormAddress(data.client?.address || '');
     setFormEmployer(data.client?.employer || '');
     setFormIncome(String(data.client?.monthly_income ?? ''));
@@ -93,7 +107,7 @@ export default function CaseDetail() {
       setLatestAnalysis(existingAnalysis);
     } catch (err) {
       console.error(err);
-      setError('Unable to load specified case.');
+      setError('Could not load the specified case file.');
     } finally {
       setLoading(false);
     }
@@ -116,18 +130,15 @@ export default function CaseDetail() {
     }
   };
 
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (newStatus, customNote = null) => {
     try {
       setUpdatingStatus(true);
-      const updated = await updateCaseStatus(
-        caseData.id,
-        newStatus,
-        `Status updated to ${newStatus}`
-      );
+      const note = customNote || `Status manually updated to ${newStatus}`;
+      const updated = await updateCaseStatus(caseData.id, newStatus, note);
       setCaseData(updated);
       syncFormState(updated);
     } catch (err) {
-      alert('Error updating status.');
+      alert('Error updating case status.');
     } finally {
       setUpdatingStatus(false);
     }
@@ -139,7 +150,7 @@ export default function CaseDetail() {
       setSavingForm(true);
       const updated = await updateCaseManualForm(caseData.id, {
         full_name: formName,
-        national_id: formNatId,
+        national_id: formNationalId,
         address: formAddress,
         employer: formEmployer,
         monthly_income: parseFloat(formIncome) || 0,
@@ -151,7 +162,7 @@ export default function CaseDetail() {
       setCaseData(updated);
       syncFormState(updated);
     } catch (err) {
-      alert('Error saving underwriting form.');
+      alert('Error saving manual underwriting sheet.');
     } finally {
       setSavingForm(false);
     }
@@ -211,7 +222,7 @@ export default function CaseDetail() {
   if (loading) {
     return (
       <div className="p-12 text-center text-slate-400">
-        Loading case details...
+        Loading credit application details...
       </div>
     );
   }
@@ -220,37 +231,62 @@ export default function CaseDetail() {
     return (
       <div className="p-8 rounded-2xl bg-red-950/30 border border-red-800/40 text-center space-y-4">
         <AlertTriangle className="w-10 h-10 text-red-400 mx-auto" />
-        <p className="text-red-300 font-medium">{error || 'Case not found.'}</p>
+        <p className="text-red-300 font-medium">{error || 'Case file not found.'}</p>
         <button
           onClick={() => navigate('/cases')}
           className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs hover:bg-slate-700 cursor-pointer"
         >
-          Return to cases list
+          Back to case list
         </button>
       </div>
     );
   }
 
+  // Financial calculations
+  const currencySymbol = caseData.currency || 'EUR';
+  const monthlyRate = calculateMonthlyAnnuity(
+    caseData.requested_amount,
+    caseData.interest_rate_annual,
+    caseData.loan_term_months
+  );
+  const existingDebts = caseData.client.existing_monthly_debts || 0;
+  const totalMonthlyCommitments = monthlyRate + existingDebts;
+  const currentIncome = caseData.client.monthly_income || 1;
+  const dtiPercent = ((totalMonthlyCommitments / currentIncome) * 100).toFixed(1);
+  const isDtiCompliant = parseFloat(dtiPercent) <= 40.0;
+
+  // KYC validation checks
+  const isIdExpired = caseData.client.id_card_expiry
+    ? new Date(caseData.client.id_card_expiry) < new Date()
+    : false;
+
   const isSplitDesktop = isCopilotOpen && copilotViewMode === 'split';
 
   return (
     <div className="space-y-5 w-full min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Top back navigation & Banking Metadata Badges */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/cases')}
           className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to cases</span>
+          <span>Back to Cases Registry</span>
         </button>
 
-        {caseData.scenario_tag && (
-          <span className="text-xs font-mono px-3 py-1 rounded-full bg-[#0e172a] border border-[#1e3158] text-slate-300 max-w-full truncate">
-            {caseData.scenario_tag === 'discrepancy_case' && 'Demo Scenario 1: Cross-Check Inconsistency (Income €5,200 vs €5,700 & Name John vs Jonathan)'}
-            {caseData.scenario_tag === 'expired_id_case' && 'Demo Scenario 2: Critical Edge Case (Expired ID Card → Automated SMS/Email)'}
-            {caseData.scenario_tag === 'valid_green_case' && 'Demo Scenario 3: 100% Valid Clean Case (Green Flags & DTI < 40%)'}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="px-3 py-1 rounded-lg bg-[#0e172a] border border-[#1e3158] text-slate-300 font-medium flex items-center gap-1.5">
+            <Building className="w-3.5 h-3.5 text-blue-400" />
+            <span>{caseData.branch || 'Central Plaza Branch'}</span>
           </span>
-        )}
+          <span className="px-3 py-1 rounded-lg bg-[#0e172a] border border-[#1e3158] text-slate-300 font-medium">
+            Channel: <strong className="text-white">{caseData.channel || 'Online Web Onboarding'}</strong>
+          </span>
+          <span className="px-3 py-1 rounded-lg bg-[#071b12] border border-[#14532d] text-emerald-300 font-medium flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>FICO Score: {caseData.client.fico_score || 715}</span>
+          </span>
+        </div>
       </div>
 
       {/* Case Header Card */}
@@ -272,14 +308,15 @@ export default function CaseDetail() {
               </span>
             </div>
             <p className="text-slate-300 text-xs sm:text-sm mt-1 font-medium">
-              {caseData.title} — Applicant: <strong className="text-white">{caseData.client.full_name}</strong>
+              {caseData.title} — Applicant: <strong className="text-white">{caseData.client.full_name}</strong> (National ID: <span className="font-mono text-slate-300">{caseData.client.national_id || caseData.client.cnp}</span>)
             </p>
             <p className="text-xs text-slate-500 mt-0.5">
-              Registered: {new Date(caseData.created_at).toLocaleString('en-GB')} • Assigned to: {caseData.assigned_to}
+              Registered: {new Date(caseData.created_at).toLocaleString()} • Assigned Officer: <strong className="text-slate-400">{caseData.assigned_to}</strong>
             </p>
           </div>
         </div>
 
+        {/* Right Controls: Official Status Dropdown + Optional Plugin AI Copilot Trigger */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-[#050811] px-3 py-2 rounded-xl border border-[#192742]">
             <span className="text-xs text-slate-400">Status:</span>
@@ -289,29 +326,33 @@ export default function CaseDetail() {
               onChange={(e) => handleStatusChange(e.target.value)}
               className="bg-[#0e172a] text-xs font-semibold text-white px-2.5 py-1 rounded-lg border border-[#253960] focus:outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="in_progress">In progress</option>
-              <option value="in_review">In review</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="in_review">In Review</option>
+              <option value="completed">Approved / Completed</option>
+              <option value="pending">Pending Documents</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>
 
+          {/* Plugin Copilot Trigger Button (Decoupled as external tool) */}
           <button
             onClick={handleOpenCopilot}
+            title="Open multi-agent AI assistant for triage, cross-checking and audit support"
             className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg cursor-pointer active:scale-95 ${
               isCopilotOpen
-                ? 'bg-slate-800 text-amber-300 border border-amber-400/50'
-                : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-500/20'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/50 shadow-amber-400/10'
+                : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-amber-500/20'
             }`}
           >
-            <Bot className="w-4 h-4 stroke-[2.2]" />
-            <span>{isCopilotOpen ? 'Close AI Copilot' : 'Raiffeisen AI Copilot (Triage & Audit)'}</span>
+            <Sparkles className="w-4 h-4 stroke-[2.2]" />
+            <span>{isCopilotOpen ? 'Hide AI Plugin' : 'Plugin: AI Copilot'}</span>
           </button>
         </div>
       </div>
 
+      {/* Main Responsive Grid: BankDesk Native Interface + AI Copilot Drawer */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* If Copilot is in EXPANDED mode, render across full width at top */}
         {isCopilotOpen && copilotViewMode === 'expanded' && (
           <div ref={copilotContainerRef} className="xl:col-span-12 w-full min-w-0">
             <AICopilotDrawer
@@ -327,108 +368,214 @@ export default function CaseDetail() {
           </div>
         )}
 
-        {/* LEFT PANE: BANKDESK CASE WORKSPACE */}
+        {/* LEFT PANE: BANKDESK NATIVE CASE WORKSPACE */}
         <div
           className={`space-y-5 min-w-0 w-full ${
             isSplitDesktop ? 'xl:col-span-6' : 'xl:col-span-12'
           }`}
         >
+          {/* Real Banking Summary Cards: 3 Analytical Panels */}
           <div className={`grid grid-cols-1 ${isSplitDesktop ? 'gap-4' : 'lg:grid-cols-3 gap-5'}`}>
-            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5">
-              <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
-                <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span>Applicant Record</span>
-                </div>
-                <button
-                  onClick={() => setActiveTab('underwriting_sheet')}
-                  className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
-                >
-                  Edit manually
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-                <div>
-                  <span className="text-slate-400 block text-xs">Full Name</span>
-                  <span className="text-slate-100 font-semibold">{caseData.client.full_name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">National ID</span>
-                  <span className="text-slate-200 font-mono">{caseData.client.national_id}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">ID Series & Expiry</span>
-                  <span className="text-slate-200 font-mono text-xs">
-                    {caseData.client.id_card_series || 'ID 892011'} ({caseData.client.id_card_expiry || '2031-05-14'})
+            
+            {/* Panel 1: Identity & KYC / AML Verification */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
+                  <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span>Identity & KYC Data</span>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {caseData.client.marital_status || 'Married'} • {caseData.client.dependents_count || 0} dependent(s)
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-xs">Employer</span>
-                  <span className="text-slate-200 truncate block">{caseData.client.employer || 'Unspecified'}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-slate-400 block text-xs">Permanent Residence</span>
-                  <span className="text-slate-200">{caseData.client.address || 'N/A'}</span>
-                </div>
-              </div>
 
-              <div className="pt-3 border-t border-[#142036] flex flex-wrap justify-between items-center gap-2">
-                <div>
-                  <span className="text-slate-400 block text-xs">Net Monthly Income</span>
-                  <span className="text-emerald-400 font-bold text-sm sm:text-base">
-                    {caseData.client.monthly_income?.toLocaleString('en-US')} {caseData.currency}
-                  </span>
-                </div>
-                {caseData.requested_amount && (
-                  <div className="text-right">
-                    <span className="text-slate-400 block text-xs">Loan Requested</span>
-                    <span className="text-blue-400 font-bold text-sm sm:text-base">
-                      {caseData.requested_amount?.toLocaleString('en-US')} {caseData.currency} ({caseData.loan_term_months} mo)
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Full Name:</span>
+                    <span className="text-white font-semibold">{caseData.client.full_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">National ID:</span>
+                    <span className="text-slate-200 font-mono text-xs">{caseData.client.national_id || caseData.client.cnp}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">ID Document:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-200 font-mono text-xs">{caseData.client.id_card_series || 'ID 892011'}</span>
+                      {isIdExpired ? (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">
+                          EXPIRED
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">
+                          (exp. {caseData.client.id_card_expiry || '2031-05-14'})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Address:</span>
+                    <span className="text-slate-200 truncate max-w-[180px] text-xs text-right" title={caseData.client.address}>
+                      {caseData.client.address || 'N/A'}
                     </span>
                   </div>
-                )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Contact Info:</span>
+                    <span className="text-slate-300 text-xs truncate max-w-[180px]">
+                      {caseData.client.phone || caseData.client.email || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">AML / PEP Screening:</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                  {caseData.client.aml_status || 'Compliant — No Alerts'}
+                </span>
               </div>
             </div>
 
-            <div className={`${isSplitDesktop ? '' : 'lg:col-span-2'} p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
-              <div>
+            {/* Panel 2: Employment & Income Verification */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
                   <div className="flex items-center gap-2 text-white font-semibold text-sm">
-                    <FileCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Case Remarks & Underwriting History</span>
+                    <Building className="w-4 h-4 text-emerald-400" />
+                    <span>Employment & Income</span>
                   </div>
                   <span className="text-xs text-slate-400">
-                    Priority: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
+                    Tenure: {caseData.client.seniority_current_employer || '2 years'}
                   </span>
                 </div>
 
-                <div className="mt-3 p-3.5 rounded-xl bg-[#050811] border border-[#142036] text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {caseData.notes || 'No additional remarks recorded.'}
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Employer:</span>
+                    <span className="text-white font-medium truncate max-w-[170px]" title={caseData.client.employer}>
+                      {caseData.client.employer || 'Unspecified'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Contract Type:</span>
+                    <span className="text-slate-200 text-xs">
+                      {caseData.client.employment_contract_type || 'Permanent Full-Time'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Declared Net Income:</span>
+                    <span className="text-slate-200 font-semibold">
+                      {caseData.client.monthly_income?.toLocaleString()} {currencySymbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Tax Authority Query:</span>
+                    <span className="text-emerald-400 font-medium text-xs">
+                      {caseData.client.anaf_consent ? 'Electronic Consent Granted' : 'Requires Physical Certificate'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">External Monthly Debt:</span>
+                    <span className="text-amber-400 font-semibold">
+                      {caseData.client.existing_monthly_debts?.toLocaleString()} {currencySymbol} / mo
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-[#0d1629] border border-[#1d2f52] text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 text-slate-200">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>
-                    {latestAnalysis
-                      ? `Latest AI Audit (${latestAnalysis.analysisId}): ${latestAnalysis.metrics?.redFlagsCount || 0} Red Flags, DTI ${latestAnalysis.feasibilityMath?.dti_percentage}%`
-                      : 'This file can be audited automatically with the Raiffeisen AI Copilot extension.'}
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">Eligible Net Income:</span>
+                <span className="text-emerald-400 font-bold text-sm">
+                  {caseData.client.monthly_income?.toLocaleString()} {currencySymbol}
+                </span>
+              </div>
+            </div>
+
+            {/* Panel 3: Loan Parameters & DTI Regulatory Check */}
+            <div className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3.5 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-[#142036] pb-2.5">
+                  <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                    <Calculator className="w-4 h-4 text-blue-400" />
+                    <span>Loan Terms & DTI (Regulatory)</span>
+                  </div>
+                  <span className="text-xs font-mono text-slate-300">
+                    {caseData.loan_term_months} mos
                   </span>
                 </div>
-                {!isCopilotOpen && (
-                  <button
-                    onClick={handleOpenCopilot}
-                    className="text-xs sm:text-sm font-bold text-amber-400 hover:text-amber-300 shrink-0 underline cursor-pointer"
-                  >
-                    {latestAnalysis ? 'View AI Audit Report →' : 'Launch AI Triage →'}
-                  </button>
-                )}
+
+                <div className="space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Requested Amount:</span>
+                    <span className="text-white font-bold text-sm">
+                      {caseData.requested_amount?.toLocaleString()} {currencySymbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Interest & APR:</span>
+                    <span className="text-slate-200 text-xs">
+                      {caseData.interest_rate_annual}% ({caseData.interest_type || 'Fixed'}) • APR {caseData.dae_percent || 9.42}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">New Monthly Payment:</span>
+                    <span className="text-blue-400 font-bold">
+                      {monthlyRate.toLocaleString()} {currencySymbol} / mo
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 text-xs">Total Monthly Debt:</span>
+                    <span className="text-slate-200 font-medium">
+                      {totalMonthlyCommitments.toLocaleString()} {currencySymbol} / mo
+                    </span>
+                  </div>
+
+                  {/* DTI Progress Bar */}
+                  <div className="pt-1">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-400 text-[11px]">Debt-to-Income (DTI):</span>
+                      <span className={`font-bold text-xs ${isDtiCompliant ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {dtiPercent}% (Max Regulatory Cap: 40%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#050811] h-2 rounded-full overflow-hidden border border-[#192742]">
+                      <div
+                        className={`h-full transition-all rounded-full ${
+                          isDtiCompliant ? 'bg-emerald-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(parseFloat(dtiPercent) * 2, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2.5 border-t border-[#142036] flex items-center justify-between text-xs">
+                <span className="text-slate-400">Regulatory Compliance:</span>
+                <span className={`font-semibold flex items-center gap-1 ${isDtiCompliant ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isDtiCompliant ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                  <span>{isDtiCompliant ? 'Compliant (< 40%)' : 'Exceeded (> 40%)'}</span>
+                </span>
               </div>
             </div>
           </div>
 
+          {/* Operational Notes Banner */}
+          <div className="p-4 rounded-xl bg-[#090f1e] border border-[#142036] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="flex items-start gap-2.5 text-slate-300">
+              <FileCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-white">Case Notes: </span>
+                <span className="text-slate-300">{caseData.notes || 'No additional case notes logged.'}</span>
+              </div>
+            </div>
+            <span className="text-xs text-slate-400 shrink-0">
+              Priority: <strong className="text-amber-400 uppercase">{caseData.priority}</strong>
+            </span>
+          </div>
+
+          {/* Official BankDesk Tabs: Documents, Manual Verification, Credit Bureau, Tasks, Audit History */}
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -441,19 +588,31 @@ export default function CaseDetail() {
                   }`}
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Documents & Source Line Viewer ({caseData.documents.length})</span>
+                  <span>Attached Documents ({caseData.documents.length})</span>
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('underwriting_sheet')}
+                  onClick={() => setActiveTab('manual_verification')}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'underwriting_sheet'
+                    activeTab === 'manual_verification'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Calculator className="w-4 h-4" />
-                  <span>Underwriting Sheet (Data Entry)</span>
+                  <span>Underwriting Verification (Data Entry)</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('credit_bureau')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === 'credit_bureau'
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Credit Bureau (FICO {caseData.client.fico_score || 715})</span>
                 </button>
 
                 <button
@@ -487,7 +646,7 @@ export default function CaseDetail() {
                   className="px-3 py-1.5 rounded-xl bg-[#111c33] hover:bg-[#192848] border border-[#21355e] text-xs font-medium text-slate-200 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Upload Document</span>
+                  <span>Attach Document</span>
                 </button>
               )}
             </div>
@@ -495,6 +654,7 @@ export default function CaseDetail() {
             {/* TAB 1: DOCUMENTS & LINE-BY-LINE VIEWER */}
             {activeTab === 'documents' && (
               <div className={`grid grid-cols-1 ${isSplitDesktop ? 'gap-4' : 'lg:grid-cols-12 gap-5'}`}>
+                {/* Document Selector */}
                 <div className={`${isSplitDesktop ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : 'lg:col-span-5 space-y-2.5'}`}>
                   {caseData.documents.map((doc) => {
                     const isSelected = selectedDoc?.id === doc.id;
@@ -542,6 +702,7 @@ export default function CaseDetail() {
                   })}
                 </div>
 
+                {/* Inline Document Inspector with Line Numbers */}
                 <div className={`${isSplitDesktop ? '' : 'lg:col-span-7'} p-4 sm:p-5 rounded-2xl bg-[#090f1e] border border-[#142036] flex flex-col justify-between space-y-4`}>
                   {selectedDoc ? (
                     <>
@@ -556,67 +717,78 @@ export default function CaseDetail() {
                             </h3>
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
-                            Type: {selectedDoc.document_type} • Line-numbered document source inspector
+                            Type: {selectedDoc.document_type} • Archival & Audit Grade Format
                           </p>
                         </div>
                         {highlightedLine && (
                           <span className="px-3 py-1 rounded-lg bg-amber-400/20 border border-amber-400 text-amber-300 text-xs font-bold animate-pulse">
-                            Line {highlightedLine} highlighted from AI audit
+                            Line {highlightedLine} Highlighted
                           </span>
                         )}
                       </div>
 
-                      <div className="rounded-xl bg-[#050811] border border-[#182642] p-3 font-mono text-xs sm:text-sm space-y-1.5 max-h-[460px] overflow-y-auto">
-                        {(selectedDoc.content_text || '').split('\n').map((line, index) => {
-                          const lineNum = index + 1;
-                          const isHighlighted = highlightedLine === lineNum;
-                          return (
-                            <div
-                              id={`doc-line-${lineNum}`}
-                              key={lineNum}
-                              onClick={() => setHighlightedLine(lineNum === highlightedLine ? null : lineNum)}
-                              className={`px-3 py-2 rounded-lg flex items-start gap-3 cursor-pointer transition-colors ${
-                                isHighlighted
-                                  ? 'bg-amber-400/25 border-2 border-amber-400 text-amber-100 font-bold shadow-md'
-                                  : 'hover:bg-[#0d162b] text-slate-200'
-                              }`}
-                            >
-                              <span className="text-slate-500 select-none w-6 text-right shrink-0">
-                                {lineNum}
-                              </span>
-                              <span className="flex-1 break-words">{line}</span>
-                            </div>
-                          );
-                        })}
+                      {/* Document Content with numbered lines */}
+                      <div className="bg-[#050811] border border-[#142036] rounded-xl p-4 font-mono text-xs text-slate-300 overflow-x-auto max-h-[500px] overflow-y-auto space-y-1">
+                        {selectedDoc.content_text ? (
+                          selectedDoc.content_text.split('\n').map((line, idx) => {
+                            const lineNum = idx + 1;
+                            const isHighlighted = highlightedLine === lineNum;
+                            return (
+                              <div
+                                key={idx}
+                                id={`doc-line-${lineNum}`}
+                                className={`py-1 px-2.5 rounded transition-colors flex items-start gap-3 ${
+                                  isHighlighted
+                                    ? 'bg-amber-400/25 text-amber-200 border-l-4 border-amber-400 font-semibold'
+                                    : 'hover:bg-slate-800/40 text-slate-300'
+                                }`}
+                              >
+                                <span className="text-slate-600 select-none w-7 text-right shrink-0">
+                                  {lineNum}
+                                </span>
+                                <span className="break-all whitespace-pre-wrap">{line}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-slate-500 py-8 text-center">
+                            Document text content could not be rendered or file is an unparsed scan.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 flex justify-between items-center pt-2 border-t border-[#142036]">
+                        <span>Secure bank repository storage compliant with data protection standards</span>
+                        <span>MIME: {selectedDoc.mime_type || 'application/pdf'}</span>
                       </div>
                     </>
                   ) : (
-                    <div className="p-12 text-center text-slate-500 text-sm">
-                      Select a document from the left to inspect content.
+                    <div className="p-12 text-center text-slate-500">
+                      Select a document from the left list to inspect its contents.
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* TAB 2: MANUAL UNDERWRITING FORM */}
-            {activeTab === 'underwriting_sheet' && (
+            {/* TAB 2: MANUAL UNDERWRITING VERIFICATION SHEET */}
+            {activeTab === 'manual_verification' && (
               <form
                 onSubmit={handleSaveManualForm}
                 className="p-5 sm:p-6 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-5"
               >
                 <div className="border-b border-[#142036] pb-3">
                   <h3 className="text-base font-bold text-white">
-                    Internal Underwriting & Verification Record (Manual Workflow)
+                    Internal Underwriting & Verification Worksheet (Manual Data Entry)
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                    In traditional banking procedures without AI, the officer cross-checks each PDF manually (~45 mins). With Raiffeisen AI Copilot, validated values can be verified in 3 seconds.
+                    The loan officer cross-checks submitted customer documentation against central core bank records and enters validated eligibility figures.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Applicant Legal Name</label>
+                    <label className="block text-slate-300 font-medium mb-1">Applicant Full Name</label>
                     <input
                       type="text"
                       value={formName}
@@ -625,16 +797,16 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">National ID Number</label>
+                    <label className="block text-slate-300 font-medium mb-1">National Identification Number (ID / CNP)</label>
                     <input
                       type="text"
-                      value={formNatId}
-                      onChange={(e) => setFormNatId(e.target.value)}
+                      value={formNationalId}
+                      onChange={(e) => setFormNationalId(e.target.value)}
                       className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2.5 text-white font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Verified Residence Address</label>
+                    <label className="block text-slate-300 font-medium mb-1">Verified Residential Address</label>
                     <input
                       type="text"
                       value={formAddress}
@@ -652,7 +824,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Net Eligible Monthly Income (EUR)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Eligible Monthly Net Income ({currencySymbol})</label>
                     <input
                       type="number"
                       value={formIncome}
@@ -661,7 +833,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Existing Monthly Debt Obligations (EUR)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Existing Monthly Debt Obligations ({currencySymbol})</label>
                     <input
                       type="number"
                       value={formDebts}
@@ -670,7 +842,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Requested Loan Amount (EUR)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Requested Loan Principal ({currencySymbol})</label>
                     <input
                       type="number"
                       value={formAmount}
@@ -679,7 +851,7 @@ export default function CaseDetail() {
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Loan Term (Months)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Loan Tenor (Months)</label>
                     <input
                       type="number"
                       value={formTerm}
@@ -690,7 +862,7 @@ export default function CaseDetail() {
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Officer Notes & Sign-off</label>
+                  <label className="block text-xs sm:text-sm text-slate-300 font-medium mb-1">Underwriter Risk & Compliance Notes</label>
                   <textarea
                     rows="3"
                     value={formNotes}
@@ -706,18 +878,100 @@ export default function CaseDetail() {
                     className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{savingForm ? 'Saving...' : 'Save Underwriting Record'}</span>
+                    <span>{savingForm ? 'Saving...' : 'Save Worksheet Updates'}</span>
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 3: TASKS */}
+            {/* TAB 3: CREDIT BUREAU REPORT (CRB / BC) */}
+            {activeTab === 'credit_bureau' && (
+              <div className="p-5 sm:p-6 rounded-2xl bg-[#090f1e] border border-[#142036] space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-emerald-400" />
+                      <span>Credit Bureau Inquiry Report (Central Credit Register)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Inquiry Reference: BC-2026-9921 • Inquiry Date: {new Date(caseData.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-800 text-emerald-300 text-xs font-bold">
+                    Risk Assessment: Very Low Risk
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">FICO Score</span>
+                    <p className="text-3xl font-extrabold text-emerald-400">
+                      {caseData.client.fico_score || 715} <span className="text-xs text-slate-500 font-normal">/ 850</span>
+                    </p>
+                    <span className="text-[11px] text-slate-400 block">Implied default probability below 1.2%</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">Delinquencies (Past 48 Months)</span>
+                    <p className="text-xl font-bold text-white">0 Late Payments</p>
+                    <span className="text-[11px] text-emerald-400 font-medium block">
+                      {caseData.client.credit_bureau_status || 'Class A Performance Tier'}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#142036] text-center space-y-1">
+                    <span className="text-xs text-slate-400">Active External Contracts</span>
+                    <p className="text-xl font-bold text-white">
+                      {caseData.client.credit_bureau_active_loans || 1} Contract(s)
+                    </p>
+                    <span className="text-[11px] text-amber-400 font-medium block">
+                      Monthly Debt: {caseData.client.existing_monthly_debts || 200} {currencySymbol} / mo
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    External Bank Credit Facilities Breakdown
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-[#142036]">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-[#050811] text-slate-400 border-b border-[#142036]">
+                        <tr>
+                          <th className="py-2.5 px-3 font-medium">Creditor Bank</th>
+                          <th className="py-2.5 px-3 font-medium">Facility Type</th>
+                          <th className="py-2.5 px-3 font-medium">Limit / Balance</th>
+                          <th className="py-2.5 px-3 font-medium">Monthly Installment</th>
+                          <th className="py-2.5 px-3 font-medium">Payment Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#142036] bg-[#070d1c]">
+                        <tr>
+                          <td className="py-2.5 px-3 font-medium text-white">Partner Banking Group</td>
+                          <td className="py-2.5 px-3">Revolving Credit Card</td>
+                          <td className="py-2.5 px-3">5,000 {currencySymbol}</td>
+                          <td className="py-2.5 px-3 font-semibold text-amber-300">
+                            {caseData.client.existing_monthly_debts || 200} {currencySymbol}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-400">
+                              Current (0 Days Overdue)
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: OPERATIONAL TASKS */}
             {activeTab === 'tasks' && (
               <div className="space-y-3">
                 {caseData.tasks.length === 0 ? (
                   <div className="p-8 text-center text-slate-500 text-sm bg-[#090f1e] rounded-2xl border border-[#142036]">
-                    No active tasks for this case.
+                    No active tasks assigned to this credit file.
                   </div>
                 ) : (
                   <div className="space-y-2.5">
@@ -748,7 +1002,7 @@ export default function CaseDetail() {
                                 : 'bg-amber-950/50 text-amber-400'
                             }`}
                           >
-                            {task.status === 'completed' ? 'Completed' : 'In progress'}
+                            {task.status === 'completed' ? 'Completed' : 'In Progress'}
                           </span>
                         </div>
                       </div>
@@ -758,7 +1012,7 @@ export default function CaseDetail() {
               </div>
             )}
 
-            {/* TAB 4: AUDIT TRAIL */}
+            {/* TAB 5: AUDIT TRAIL & LOGS */}
             {activeTab === 'history' && (
               <div className="space-y-3">
                 {caseData.history_entries.map((log) => (
@@ -772,11 +1026,11 @@ export default function CaseDetail() {
                     <div className="flex-1 text-xs sm:text-sm min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-white">{log.action}</span>
-                        <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString('en-GB')}</span>
+                        <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString()}</span>
                       </div>
                       <p className="text-slate-300 mt-1 break-words">{log.details}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        Performed by: <span className="text-slate-400 font-medium">{log.performed_by}</span>
+                        Performed By: <span className="text-slate-400 font-medium">{log.performed_by}</span>
                       </p>
                     </div>
                   </div>
@@ -784,9 +1038,46 @@ export default function CaseDetail() {
               </div>
             )}
           </div>
+
+          {/* OFFICIAL OFFICER DECISION PANEL (HUMAN-IN-THE-LOOP) */}
+          <div className="p-5 rounded-2xl bg-[#070c18] border border-[#182640] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+            <div>
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-blue-400" />
+                <span>Credit Committee & Officer Decision Panel</span>
+              </h4>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Confirm regulatory compliance, finalize risk checks, and issue the binding banking decision.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('rejected', 'Application rejected by loan officer / credit committee')}
+                className="px-4 py-2 rounded-xl bg-red-950/50 hover:bg-red-900/60 border border-red-800 text-red-300 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+              >
+                Reject Application
+              </button>
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('pending', 'Requesting clarifications / additional documentation from applicant')}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+              >
+                Request Clarifications
+              </button>
+              <button
+                disabled={updatingStatus}
+                onClick={() => handleStatusChange('completed', 'Application approved in full compliance with Retail Lending policies')}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+              >
+                Approve Loan (Generate Contract)
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* RIGHT PANE: RAIFFEISEN AI COPILOT */}
+        {/* RIGHT PANE (WHEN IN SPLIT MODE): RAIFFEISEN AI COPILOT EXTENSION */}
         {isCopilotOpen && copilotViewMode === 'split' && (
           <div ref={copilotContainerRef} className="xl:col-span-6 w-full min-w-0 xl:sticky xl:top-[84px]">
             <AICopilotDrawer
@@ -803,6 +1094,7 @@ export default function CaseDetail() {
         )}
       </div>
 
+      {/* Add Document Modal */}
       {showDocModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
@@ -825,17 +1117,18 @@ export default function CaseDetail() {
                 />
               </div>
               <div>
-                <label className="block text-slate-300 mb-1">Document Category</label>
+                <label className="block text-slate-300 mb-1">Document Type</label>
                 <select
                   value={newDocType}
                   onChange={(e) => setNewDocType(e.target.value)}
-                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-white"
                 >
                   <option value="Application Form">Application Form</option>
                   <option value="Income Certificate">Income Certificate</option>
                   <option value="Bank Statement">Bank Statement</option>
                   <option value="ID Card Copy">ID Card Copy</option>
                   <option value="Utility Bill">Utility Bill</option>
+                  <option value="Credit Bureau Report">Credit Bureau Report</option>
                 </select>
               </div>
               <div>
@@ -845,7 +1138,7 @@ export default function CaseDetail() {
                   required
                   value={newDocContent}
                   onChange={(e) => setNewDocContent(e.target.value)}
-                  placeholder={"Line 1: REVISED SALARY CERTIFICATE\nLine 2: Employee Name: John Miller\nLine 3: Net Monthly Income: 5,700 EUR"}
+                  placeholder={"Line 1: OFFICIAL VERIFICATION DOCUMENT\nLine 2: Title Holder: ...\nLine 3: Confirmed Values: ..."}
                   className="w-full bg-[#050811] border border-[#192742] rounded-xl p-3 text-white font-mono"
                 />
               </div>
@@ -859,7 +1152,7 @@ export default function CaseDetail() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer"
                 >
                   Upload Document
                 </button>

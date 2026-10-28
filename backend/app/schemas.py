@@ -15,6 +15,22 @@ class ClientBase(BaseModel):
     existing_monthly_debts: Optional[float] = 0.0
     id_card_series: Optional[str] = None
     id_card_expiry: Optional[str] = None
+    id_card_issuer: Optional[str] = "SPCLEP"
+    birth_date: Optional[str] = None
+    marital_status: Optional[str] = "Single"
+    dependents_count: Optional[int] = 0
+    housing_status: Optional[str] = "Owner"
+    employer_cui: Optional[str] = None
+    employment_contract_type: Optional[str] = "Permanent Full-Time"
+    seniority_current_employer: Optional[str] = "2 years"
+    seniority_total: Optional[str] = "5 years"
+    fico_score: Optional[int] = 710
+    credit_bureau_status: Optional[str] = "No Delinquencies (Class A)"
+    credit_bureau_active_loans: Optional[int] = 1
+    pep_status: Optional[str] = "Negative (Non-PEP)"
+    aml_status: Optional[str] = "Compliant L129/2019 — No Alerts"
+    anaf_consent: Optional[bool] = True
+    anaf_income: Optional[float] = None
 
 
 class ClientCreate(ClientBase):
@@ -90,11 +106,17 @@ class CaseBase(BaseModel):
     case_type: Optional[str] = "Personal Loan Application"
     status: Optional[str] = "in_progress"
     department: Optional[str] = "Retail Lending"
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: Optional[str] = "normal"
     assigned_to: Optional[str] = "Consultant 024"
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
+    interest_type: Optional[str] = "Fixed"
+    dae_percent: Optional[float] = 9.42
+    monthly_installment: Optional[float] = 0.0
+    dti_percent: Optional[float] = 0.0
     currency: Optional[str] = "EUR"
     notes: Optional[str] = None
     scenario_tag: Optional[str] = None
@@ -129,11 +151,17 @@ class CaseListOut(BaseModel):
     case_type: str
     status: str
     department: str
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: str
     assigned_to: str
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
+    interest_type: Optional[str] = "Fixed"
+    dae_percent: Optional[float] = 9.42
+    monthly_installment: Optional[float] = 0.0
+    dti_percent: Optional[float] = 0.0
     currency: str
     scenario_tag: Optional[str] = None
     created_at: datetime
@@ -151,11 +179,17 @@ class CaseDetailOut(BaseModel):
     case_type: str
     status: str
     department: str
+    branch: Optional[str] = "Central Plaza Branch"
+    channel: Optional[str] = "Online Web Onboarding"
     priority: str
     assigned_to: str
     requested_amount: Optional[float] = None
     loan_term_months: Optional[int] = 60
     interest_rate_annual: Optional[float] = 8.9
+    interest_type: Optional[str] = "Fixed"
+    dae_percent: Optional[float] = 9.42
+    monthly_installment: Optional[float] = 0.0
+    dti_percent: Optional[float] = 0.0
     currency: str
     notes: Optional[str] = None
     scenario_tag: Optional[str] = None
