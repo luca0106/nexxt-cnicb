@@ -13,7 +13,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 @router.get("", response_model=List[DocumentOut])
 def get_documents(
     case_id: Optional[int] = Query(None, description="Filter by case ID"),
-    limit: int = 50,
+    limit: int = 300,
     offset: int = 0,
     db: Session = Depends(get_db)
 ):

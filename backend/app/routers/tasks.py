@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 def get_tasks(
     status: Optional[str] = Query(None),
     case_id: Optional[int] = Query(None),
-    limit: int = 50,
+    limit: int = 300,
     db: Session = Depends(get_db)
 ):
     query = db.query(Task)

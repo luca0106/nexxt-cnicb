@@ -12,7 +12,7 @@ router = APIRouter(prefix="/history", tags=["Audit Log"])
 @router.get("", response_model=List[AuditLogOut])
 def get_history(
     case_id: Optional[int] = Query(None),
-    limit: int = 50,
+    limit: int = 300,
     db: Session = Depends(get_db)
 ):
     query = db.query(AuditLog)

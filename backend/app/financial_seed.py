@@ -36,8 +36,23 @@ def seed_financial_profiles(db):
                 remaining_term_months=term, interest_rate_annual=8.5, status='active')]
         db.add(profile)
     # Only built-in seed IDs qualify; ordinary customer records stay untouched.
+    from .seed import FIRST_NAMES, LAST_NAMES
     demo_ids = {f"18{idx}01014100{idx}1" for idx in range(6)}
     demo_ids.update(f"19{i:02d}1104100{i:02d}" for i in range(1, 25))
+    idx = 0
+    for f_idx, (_, gender_digit) in enumerate(FIRST_NAMES):
+        for l_idx, _ in enumerate(LAST_NAMES):
+            if idx >= 185:
+                break
+            idx += 1
+            birth_year = 1968 + ((idx * 7 + f_idx * 3) % 33)
+            birth_month = ((idx * 5 + l_idx) % 12) + 1
+            birth_day = ((idx * 11 + f_idx) % 28) + 1
+            yy = birth_year % 100
+            century_gender = gender_digit if birth_year < 2000 else (gender_digit + 4)
+            county_code = ((idx * 3) % 46) + 1
+            seq_code = 200 + idx
+            demo_ids.add(f"{century_gender}{yy:02d}{birth_month:02d}{birth_day:02d}{county_code:02d}{seq_code:04d}")
     for client in db.query(Client).filter(Client.national_id.in_(demo_ids)).all():
         if db.get(FinancialProfile, client.id) is not None:
             continue

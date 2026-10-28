@@ -15,7 +15,7 @@ router = APIRouter(prefix="/cases", tags=["Cases"])
 def get_cases(
     status: Optional[str] = Query(None, description="Status filter: in_progress, in_review, completed, pending, rejected"),
     search: Optional[str] = Query(None, description="Search by case number or title"),
-    limit: int = 50,
+    limit: int = 300,
     offset: int = 0,
     db: Session = Depends(get_db)
 ):

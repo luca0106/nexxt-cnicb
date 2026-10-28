@@ -15,7 +15,7 @@ Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă �
 
 ## Date demo
 
-La ultima verificare a bazei SQLite locale: **33 clienți, 33 profiluri financiare, 275 cheltuieli, 8 credite și 11 cheltuieli suspectate**. Acestea sunt valori sintetice, nu date bancare reale. Numerele se pot schimba după editări; nu sunt garanții pentru orice bază de date configurată.
+La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit, 965 documente, 188 sarcini operaționale, 374 intrări de audit, 218 profiluri financiare, 1.823 cheltuieli și 124 credite**. Acestea sunt valori sintetice, nu date bancare reale. Numerele se pot schimba după editări; nu sunt garanții pentru orice bază de date configurată.
 
 ## Verificări efectuate
 

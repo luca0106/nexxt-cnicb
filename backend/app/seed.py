@@ -1,10 +1,676 @@
 from datetime import datetime, timedelta
+import math
+from random import Random
 from sqlalchemy.orm import Session
 from .models import Client, Case, Document, Task, AuditLog
 
 
+FIRST_NAMES = [
+    ("Alexander", 1), ("Elena", 2), ("Marcus", 1), ("Sophia", 2), ("Lukas", 1),
+    ("Clara", 2), ("Sebastian", 1), ("Hannah", 2), ("Maximilian", 1), ("Victoria", 2),
+    ("Gabriel", 1), ("Natalia", 2), ("Julian", 1), ("Camilla", 2), ("Dominik", 1),
+    ("Laura", 2), ("Adrian", 1), ("Miriam", 2), ("Felix", 1), ("Bianca", 2),
+    ("Christian", 1), ("Diana", 2), ("Florian", 1), ("Alina", 2), ("Stefan", 1),
+    ("Andreea", 2), ("Tobias", 1), ("Cristina", 2), ("Philipp", 1), ("Ioana", 2),
+]
+
+LAST_NAMES = [
+    "Gruber", "Ionescu", "Wagner", "Popescu", "Bauer",
+    "Dumitrescu", "Pichler", "Stan", "Moser", "Stoica",
+]
+
+CITIES_AND_STREETS = [
+    ("Vienna", ["Mariahilfer St", "Kärntner Ring", "Praterstrasse", "Favoritenstrasse", "Währinger St"], "Vienna District Registry", "AT49RZBR0000"),
+    ("Salzburg", ["Getreidegasse", "Linzer Gasse", "Alpenstrasse", "Ignaz-Harrer-St"], "Salzburg Municipal Authority", "AT61RZBS0000"),
+    ("Graz", ["Herrengasse", "Annenstrasse", "Heinrichstrasse", "Stremayrgasse"], "Graz Civic Registry", "AT82RZST0000"),
+    ("Linz", ["Landstrasse", "Hauptplatz", "Mozartstrasse", "Wiener Strasse"], "Linz Registration Office", "AT33RZOO0000"),
+    ("Bucharest", ["Calea Victoriei", "Unirii Blvd", "Aviatorilor Blvd", "Floreasca Rd"], "SPCLEP Sector 1 Bucharest", "RO49RZBR0000"),
+    ("Cluj-Napoca", ["Eroilor Blvd", "Memorandumului St", "Dorobantilor Way", "Observatorului St"], "SPCLEP Cluj-Napoca", "RO72RZBR0000"),
+    ("Timisoara", ["Take Ionescu Blvd", "Republicii Blvd", "Cetatii Blvd", "Aradului Way"], "SPCLEP Timisoara", "RO18RZBR0000"),
+    ("Iasi", ["Stefan cel Mare Blvd", "Carol I Blvd", "Palas St", "Pacurari Way"], "SPCLEP Iasi", "RO55RZBR0000"),
+]
+
+EMPLOYERS = [
+    ("Danube Cloud Technologies GmbH", "ATU51920411", "Senior Systems Architect", "IT & Software"),
+    ("Alpine Precision Engineering AG", "ATU44819203", "Principal Mechanical Engineer", "Manufacturing"),
+    ("Vindobona Pharma Research Ltd", "ATU66301928", "Clinical Operations Manager", "Pharmaceuticals"),
+    ("Central European Logistics Group", "ATU39104827", "Supply Chain Director", "Logistics & Transport"),
+    ("Carpathian Energy Grid SA", "RO18920341", "Grid Operations Specialist", "Energy & Utilities"),
+    ("MedLife Diagnostics Clinic", "RO24910284", "Attending Specialist Physician", "Healthcare"),
+    ("Balkan Retail Distribution SRL", "RO33109482", "Regional Commercial Manager", "Retail & FMCG"),
+    ("Meridian Financial Advisory GmbH", "ATU77482910", "Senior Risk Analyst", "Financial Services"),
+    ("Kronstadt Aerospace Systems", "RO41029384", "Avionics Quality Lead", "Aerospace"),
+    ("Helvetia Construction & Infra AG", "ATU88392014", "Civil Project Coordinator", "Construction"),
+    ("Transylvania CyberSecurity Labs", "RO38910245", "Lead Security Researcher", "Cybersecurity"),
+    ("St. Stephen Private Hospital", "ATU29104958", "Chief Nursing Officer", "Healthcare"),
+    ("Continental Automotive Systems", "RO15928374", "Embedded Firmware Team Lead", "Automotive R&D"),
+    ("Vienna Philharmonic Foundation", "ATU11029384", "Financial Controller", "Arts & Administration"),
+    ("GreenWave Renewables GmbH", "ATU90128374", "Solar Portfolio Manager", "Renewable Energy"),
+]
+
+LOAN_PRODUCTS = [
+    {
+        "case_type": "Residential Mortgage Loan",
+        "titles": [
+            "Prime Residential Mortgage Acquisition",
+            "Green Energy Efficient Home Mortgage",
+            "Primary Residence Construction & Mortgage",
+            "Urban Apartment Purchase Mortgage Facility",
+        ],
+        "department": "Mortgage & Real Estate Lending",
+        "amount_range": (95000, 340000, 5000),
+        "terms": [180, 240, 300, 360],
+        "rate": 5.45,
+        "dae": 5.89,
+        "interest_type": "Variable (Euribor 6M + 2.10%)",
+        "extra_doc_type": "Collateral Valuation Report",
+    },
+    {
+        "case_type": "Personal Consumer Loan",
+        "titles": [
+            "Flexi Express Personal Consumer Loan",
+            "Home Renovation & Modernization Loan",
+            "Medical & Education Personal Facility",
+            "Unsecured Retail Consumer Credit",
+        ],
+        "department": "Retail Lending",
+        "amount_range": (8000, 48000, 2000),
+        "terms": [24, 36, 48, 60],
+        "rate": 8.90,
+        "dae": 9.42,
+        "interest_type": "Fixed (Promotional)",
+        "extra_doc_type": "Credit Bureau Report",
+    },
+    {
+        "case_type": "Refinancing Loan",
+        "titles": [
+            "Multi-Bank Debt Consolidation Facility",
+            "Fixed-Rate Balance Refinancing Loan",
+            "Retail Credit Restructuring & Top-Up",
+        ],
+        "department": "Retail Lending",
+        "amount_range": (18000, 85000, 2500),
+        "terms": [48, 60, 72, 84],
+        "rate": 7.65,
+        "dae": 8.15,
+        "interest_type": "Fixed",
+        "extra_doc_type": "Credit Bureau Report",
+    },
+    {
+        "case_type": "Auto Loan",
+        "titles": [
+            "Eco-Mobility Electric Vehicle Loan",
+            "New Passenger Vehicle Financing",
+            "Hybrid Fleet Individual Auto Credit",
+        ],
+        "department": "Retail Lending",
+        "amount_range": (16000, 68000, 2000),
+        "terms": [36, 48, 60],
+        "rate": 6.95,
+        "dae": 7.40,
+        "interest_type": "Fixed (Green Mobility)",
+        "extra_doc_type": "Vehicle Proforma & Casco Quote",
+    },
+    {
+        "case_type": "Credit Card",
+        "titles": [
+            "Raiffeisen World Elite Mastercard Limit",
+            "Gold Revolving Credit Card Facility",
+            "Platinum Travel Credit Line Application",
+        ],
+        "department": "Cards & Revolving Credit",
+        "amount_range": (5000, 25000, 1000),
+        "terms": [24, 36],
+        "rate": 11.50,
+        "dae": 12.40,
+        "interest_type": "Revolving Variable",
+        "extra_doc_type": "ANAF Tax Revenue Certificate",
+    },
+    {
+        "case_type": "Overdraft Facility",
+        "titles": [
+            "Salary Account Multi-Month Overdraft",
+            "Executive Current Account Overdraft Line",
+            "Dynamic Liquidity Overdraft Facility",
+        ],
+        "department": "Accounts & Payments",
+        "amount_range": (4000, 18000, 1000),
+        "terms": [12, 24, 36],
+        "rate": 9.50,
+        "dae": 10.15,
+        "interest_type": "Fixed",
+        "extra_doc_type": "Utility Bill",
+    },
+    {
+        "case_type": "SME Micro-Credit",
+        "titles": [
+            "PFA / Freelance Working Capital Facility",
+            "Medical Practice Equipment Micro-Loan",
+            "Authorized Professional Liquidity Line",
+        ],
+        "department": "Micro & SME Banking",
+        "amount_range": (20000, 110000, 5000),
+        "terms": [36, 48, 60, 72],
+        "rate": 7.90,
+        "dae": 8.45,
+        "interest_type": "Variable (Euribor 3M + 3.00%)",
+        "extra_doc_type": "ANAF Tax Revenue Certificate",
+    },
+]
+
+BRANCHES = [
+    "Central Plaza Branch",
+    "Financial District Branch",
+    "West City Branch",
+    "Metropolitan Branch 1",
+    "Metropolitan Branch 2",
+    "Danube Tower Corporate Center",
+    "Transylvania Regional Hub",
+    "Victoria Square Flagship Branch",
+    "Alpine Private Banking Suite",
+    "North Gate Digital Hub",
+]
+
+CHANNELS = [
+    "Online Web Onboarding",
+    "Mobile Banking App (SmartToken)",
+    "Direct Branch Advisory",
+    "Mortgage Broker Network",
+    "Video KYC Advisory Desk",
+]
+
+OFFICERS = [
+    "Consultant 024",
+    "Consultant 018 (Elena Varga)",
+    "Consultant 031 (Markus Weber)",
+    "Consultant 042 (Radu Ionescu)",
+    "Consultant 009 (Sophie Kolar)",
+]
+
+NICKNAME_MAP = {
+    "Alexander": "Alex",
+    "Maximilian": "Max",
+    "Sebastian": "Seb",
+    "Christian": "Chris",
+    "Dominik": "Dom",
+    "Philipp": "Phil",
+    "Gabriel": "Gabi",
+    "Victoria": "Vicky",
+    "Camilla": "Milla",
+    "Cristina": "Crina",
+}
+
+
+def _calc_annuity(principal: float, annual_rate: float, months: int) -> float:
+    if principal <= 0 or months <= 0:
+        return 0.0
+    r = (annual_rate / 100.0) / 12.0
+    if r <= 0:
+        return round(principal / months, 2)
+    factor = math.pow(1.0 + r, months)
+    return round(principal * (r * factor) / (factor - 1.0), 2)
+
+
+def seed_extended_bank_dossiers(db: Session):
+    """
+    Populates 185 additional unique, realistic banking client dossiers (bringing total > 215 clients)
+    modeled on real European & Romanian (NBR Reg. 17/2012, KYC/AML Law 129/2019, Credit Bureau / ANAF)
+    loan origination files. Safe and idempotent on existing databases.
+    """
+    existing_nat_ids = {row[0] for row in db.query(Client.national_id).all()}
+    existing_case_nums = {row[0] for row in db.query(Case.case_number).all()}
+
+    new_clients_data = []
+    idx = 0
+    for f_idx, (first_name, gender_digit) in enumerate(FIRST_NAMES):
+        for l_idx, last_name in enumerate(LAST_NAMES):
+            if idx >= 185:
+                break
+            idx += 1
+            rng = Random(f"bankdesk-dossier-{idx}-v1")
+
+            birth_year = 1968 + ((idx * 7 + f_idx * 3) % 33)
+            birth_month = ((idx * 5 + l_idx) % 12) + 1
+            birth_day = ((idx * 11 + f_idx) % 28) + 1
+            yy = birth_year % 100
+            century_gender = gender_digit if birth_year < 2000 else (gender_digit + 4)
+            county_code = ((idx * 3) % 46) + 1
+            seq_code = 200 + idx
+
+            nat_id = f"{century_gender}{yy:02d}{birth_month:02d}{birth_day:02d}{county_code:02d}{seq_code:04d}"
+            if nat_id in existing_nat_ids:
+                continue
+
+            case_num = str(10600 + idx)
+            if case_num in existing_case_nums:
+                continue
+
+            full_name = f"{first_name} {last_name}"
+            city, streets, issuer, iban_prefix = CITIES_AND_STREETS[(idx + f_idx) % len(CITIES_AND_STREETS)]
+            street = streets[(idx + l_idx) % len(streets)]
+            house_no = 4 + ((idx * 7) % 140)
+            apt_no = (idx % 45) + 1
+            address = f"{house_no} {street}, Apt. {apt_no}, {city}"
+
+            emp_name, emp_cui, job_role, industry = EMPLOYERS[(idx * 3 + l_idx) % len(EMPLOYERS)]
+            product = LOAN_PRODUCTS[(idx + f_idx * 2) % len(LOAN_PRODUCTS)]
+
+            mod_arch = idx % 14
+            if mod_arch in (1, 8):
+                scenario_tag = "discrepancy_case"
+                status = "in_review"
+                priority = "high"
+            elif mod_arch == 5:
+                scenario_tag = "expired_id_case"
+                status = "pending"
+                priority = "urgent"
+            elif mod_arch == 11:
+                scenario_tag = "high_dti_case"
+                status = rng.choice(["in_review", "rejected"])
+                priority = "high"
+            else:
+                scenario_tag = "valid_green_case"
+                status = rng.choice(["completed", "completed", "in_progress", "in_progress", "in_review"])
+                priority = rng.choice(["normal", "normal", "normal", "high"])
+
+            base_income = float(rng.randrange(2600, 11500, 150))
+            if product["case_type"] == "Residential Mortgage Loan" and base_income < 4500:
+                base_income += 2400.0
+
+            existing_debts = float(rng.choice([0, 0, 0, 180, 260, 350, 490, 620, 780]))
+            min_amt, max_amt, step_amt = product["amount_range"]
+            requested_amount = float(rng.randrange(min_amt, max_amt + 1, step_amt))
+            term_months = rng.choice(product["terms"])
+            rate_annual = product["rate"]
+
+            monthly_inst = _calc_annuity(requested_amount, rate_annual, term_months)
+
+            if scenario_tag == "high_dti_case":
+                base_income = max(2400.0, round((monthly_inst + existing_debts) / rng.uniform(0.43, 0.52), -1))
+                verified_income = base_income
+            elif scenario_tag == "discrepancy_case":
+                while (monthly_inst + existing_debts) / base_income > 0.35:
+                    base_income += 600.0
+                delta = float(rng.choice([350, 450, 600, -400]))
+                verified_income = max(2200.0, base_income + delta)
+            else:
+                while (monthly_inst + existing_debts) / base_income > 0.34:
+                    base_income += 500.0
+                verified_income = base_income
+
+            dti_pct = round(((monthly_inst + existing_debts) / base_income) * 100.0, 2)
+
+            if scenario_tag == "expired_id_case":
+                exp_month = ((idx % 9) + 1)
+                exp_day = ((idx * 3) % 25) + 1
+                id_expiry_iso = f"2026-{exp_month:02d}-{exp_day:02d}"
+                id_validity_doc = f"{exp_day:02d}.{exp_month:02d}.2016 - 10.02.2026 [DOCUMENT EXPIRED]"
+            else:
+                exp_year = 2028 + (idx % 7)
+                exp_month = ((idx * 2) % 12) + 1
+                exp_day = ((idx * 5) % 27) + 1
+                id_expiry_iso = f"{exp_year}-{exp_month:02d}-{exp_day:02d}"
+                id_validity_doc = f"{exp_day:02d}.{exp_month:02d}.{exp_year - 10} - {exp_day:02d}.{exp_month:02d}.{exp_year}"
+
+            series_prefix = city[:2].upper()
+            id_series = f"{series_prefix} {410000 + idx * 13}"
+            birth_date_str = f"{birth_day:02d}.{birth_month:02d}.{birth_year}"
+
+            marital = rng.choice(["Single", "Married", "Married", "Divorced", "Widowed"])
+            dependents = 0 if marital == "Single" else rng.choice([0, 1, 2, 3])
+            housing = rng.choice([
+                "Owner (No Mortgage)",
+                "Owner (With Mortgage)",
+                "Rented Apartment",
+                "Family Property",
+            ])
+            contract_type = (
+                "Authorized Freelancer (PFA)"
+                if product["case_type"] == "SME Micro-Credit"
+                else rng.choice([
+                    "Permanent Full-Time (CIM)",
+                    "Permanent Full-Time (CIM)",
+                    "Permanent Full-Time (Executive)",
+                    "Fixed-Term Collective Contract (24m)",
+                ])
+            )
+            sen_curr_yrs = 1 + (idx % 11)
+            sen_tot_yrs = sen_curr_yrs + 2 + (idx % 9)
+
+            if scenario_tag == "high_dti_case":
+                fico = rng.randint(565, 635)
+                cb_status = "1 historical delay (31-60 days) in past 24 months (Class B)"
+            elif scenario_tag == "expired_id_case":
+                fico = rng.randint(635, 695)
+                cb_status = "No active delinquencies (1 minor delay < 15 days)"
+            else:
+                fico = rng.randint(685, 825)
+                cb_status = "No delinquencies past 48 months (Class A0)"
+
+            active_loans_count = 0 if existing_debts == 0 else rng.choice([1, 1, 2, 3])
+            pep_status = "PEP Family Member — Enhanced Due Diligence" if idx % 47 == 0 else "Negative (Non-PEP)"
+            aml_status = (
+                "EDD Completed L129/2019 — Approved"
+                if idx % 47 == 0
+                else "Compliant L129/2019 — 0 Sanctions / 0 Alerts"
+            )
+            anaf_consent = (idx % 9 != 0)
+
+            phone_prefix = "+40 7" if city in ("Bucharest", "Cluj-Napoca", "Timisoara", "Iasi") else "+43 6"
+            phone = f"{phone_prefix}{20 + (idx % 79):02d} {100 + idx:03d} {200 + (idx * 3) % 799:03d}"
+            email_slug = f"{first_name.lower()}.{last_name.lower()}.{idx}"
+            email_domain = rng.choice(["raiffeisen-mail.eu", "corporate-inbox.at", "euro-post.ro", "danube-net.com"])
+            email = f"{email_slug}@{email_domain}"
+
+            created_dt = datetime.utcnow() - timedelta(days=(idx % 45) + 1, hours=(idx * 3) % 23)
+            updated_dt = created_dt + timedelta(hours=rng.randint(2, 18))
+
+            cl = Client(
+                full_name=full_name,
+                national_id=nat_id,
+                email=email,
+                phone=phone,
+                address=address,
+                employer=emp_name,
+                monthly_income=base_income,
+                existing_monthly_debts=existing_debts,
+                id_card_series=id_series,
+                id_card_expiry=id_expiry_iso,
+                id_card_issuer=issuer,
+                birth_date=birth_date_str,
+                marital_status=marital,
+                dependents_count=dependents,
+                housing_status=housing,
+                employer_cui=emp_cui,
+                employment_contract_type=contract_type,
+                seniority_current_employer=f"{sen_curr_yrs} years and {(idx % 11) + 1} months",
+                seniority_total=f"{sen_tot_yrs} years",
+                fico_score=fico,
+                credit_bureau_status=cb_status,
+                credit_bureau_active_loans=active_loans_count,
+                pep_status=pep_status,
+                aml_status=aml_status,
+                anaf_consent=anaf_consent,
+                anaf_income=verified_income if anaf_consent else None,
+                created_at=created_dt - timedelta(days=3),
+            )
+            db.add(cl)
+            db.flush()
+
+            title = rng.choice(product["titles"])
+            branch = BRANCHES[(idx + l_idx) % len(BRANCHES)]
+            channel = CHANNELS[(idx + f_idx) % len(CHANNELS)]
+            officer = OFFICERS[idx % len(OFFICERS)]
+
+            if scenario_tag == "discrepancy_case":
+                notes = (
+                    f"Dossier #{case_num} ({product['case_type']}): Cross-check alert triggered. "
+                    f"Application states net income €{base_income:,.0f}, whereas ANAF & Employer Certificate confirm €{verified_income:,.0f}. "
+                    f"Assigned to {officer} for reconciliation."
+                )
+            elif scenario_tag == "expired_id_case":
+                notes = (
+                    f"Compliance hold on Dossier #{case_num}: Identity Card ({id_series}) expired prior to underwriting date "
+                    f"and utility bill service address differs from primary domicile. Automated remediation link prepared."
+                )
+            elif scenario_tag == "high_dti_case":
+                notes = (
+                    f"Prudential NBR Regulation 17/2012 alert: Calculated Debt-to-Income ratio is {dti_pct}% "
+                    f"(exceeds 40% maximum ceiling). Requires tenor extension, co-debtor, or principal reduction."
+                )
+            else:
+                notes = (
+                    f"Complete retail credit file #{case_num} for {full_name} ({job_role} at {emp_name}). "
+                    f"KYC/AML L129/2019 clear, FICO {fico}, verified income €{verified_income:,.0f}/mo, DTI {dti_pct}% (< 40% ceiling)."
+                )
+
+            c = Case(
+                case_number=case_num,
+                title=title,
+                case_type=product["case_type"],
+                status=status,
+                department=product["department"],
+                branch=branch,
+                channel=channel,
+                priority=priority,
+                assigned_to=officer,
+                requested_amount=requested_amount,
+                loan_term_months=term_months,
+                interest_rate_annual=rate_annual,
+                interest_type=product["interest_type"],
+                dae_percent=product["dae"],
+                monthly_installment=monthly_inst,
+                dti_percent=dti_pct,
+                currency="EUR",
+                scenario_tag=scenario_tag,
+                notes=notes,
+                client_id=cl.id,
+                created_at=created_dt,
+                updated_at=updated_dt,
+            )
+            db.add(c)
+            db.flush()
+
+            cert_employee_name = full_name
+            if scenario_tag == "discrepancy_case" and first_name in NICKNAME_MAP and (idx % 2 == 0):
+                cert_employee_name = f"{NICKNAME_MAP[first_name]} {last_name}"
+
+            iban = f"{iban_prefix}0600{10000000 + idx * 97}"
+            closing_balance = round(verified_income * rng.uniform(1.8, 6.4), 2)
+
+            doc1 = Document(
+                case_id=c.id,
+                doc_code="doc-1",
+                file_name=f"Loan_Application_Form_{case_num}.pdf",
+                document_type="Application Form",
+                file_size_kb=280 + (idx % 90),
+                page_count=2,
+                status="uploaded" if status != "completed" else "verified",
+                content_text=(
+                    f"Line 1: RAIFFEISEN BANK - STANDARDIZED CREDIT APPLICATION FORM ({product['case_type'].upper()})\n"
+                    f"Line 2: Case Registration Number: #{case_num} | Branch: {branch} | Channel: {channel}\n"
+                    f"Line 3: ------------------------------------------------------------------\n"
+                    f"Line 4: Applicant Name: {full_name}\n"
+                    f"Line 5: National ID Number: {nat_id} | Birth Date: {birth_date_str}\n"
+                    f"Line 6: Declared Residential Address: {address}\n"
+                    f"Line 7: Employer: {emp_name} (CUI/VAT: {emp_cui} | Role: {job_role})\n"
+                    f"Line 8: Declared Net Monthly Income: {base_income:,.0f} EUR\n"
+                    f"Line 9: Requested Loan Amount: {requested_amount:,.0f} EUR | Loan Term: {term_months} Months | Rate: {rate_annual}% ({product['interest_type']})\n"
+                    f"Line 10: Existing Monthly Debt Repayments: {existing_debts:,.0f} EUR | Estimated New Installment: {monthly_inst:,.2f} EUR\n"
+                    f"Line 11: GDPR & ANAF Electronic Interrogation Consent: {'GRANTED' if anaf_consent else 'PAPER CERTIFICATE'}\n"
+                    f"Line 12: Electronic Signature: VERIFIED (Qualified Certificate #{88000 + idx})"
+                ),
+                created_at=created_dt,
+            )
+
+            doc2 = Document(
+                case_id=c.id,
+                doc_code="doc-2",
+                file_name=f"Identity_Card_{first_name}_{last_name}_{case_num}.pdf",
+                document_type="ID Card Copy",
+                file_size_kb=165 + (idx % 50),
+                page_count=1,
+                status="expired" if scenario_tag == "expired_id_case" else "verified",
+                content_text=(
+                    f"Line 1: EUROPEAN UNION / NATIONAL IDENTITY CARD (OCR ARCHIVE SCAN)\n"
+                    f"Line 2: Document Number: {id_series} | Issuing Authority: {issuer}\n"
+                    f"Line 3: National ID: {nat_id}\n"
+                    f"Line 4: Surname: {last_name} | Given Name: {first_name}\n"
+                    f"Line 5: Date of Birth: {birth_date_str} | Domicile City: {city}\n"
+                    f"Line 6: Permanent Residence: {address}\n"
+                    f"Line 7: Validity Period: {id_validity_doc}"
+                ),
+                created_at=created_dt + timedelta(minutes=8),
+            )
+
+            doc3 = Document(
+                case_id=c.id,
+                doc_code="doc-3",
+                file_name=f"Employer_Income_Certificate_{case_num}.pdf",
+                document_type="Income Certificate",
+                file_size_kb=210 + (idx % 60),
+                page_count=1,
+                status="flagged" if scenario_tag == "discrepancy_case" else "verified",
+                content_text=(
+                    f"Line 1: OFFICIAL EMPLOYER SALARY & ANAF REVENUE CERTIFICATE NO. {4000 + idx}\n"
+                    f"Line 2: Employer: {emp_name} | Fiscal Registration: {emp_cui} | Industry: {industry}\n"
+                    f"Line 3: Employee: {cert_employee_name}\n"
+                    f"Line 4: National ID: {nat_id} | Position: {job_role} ({contract_type})\n"
+                    f"Line 5: Permanent Residence: {address}\n"
+                    f"Line 6: Employment Tenure: {sen_curr_yrs} years at current employer ({sen_tot_yrs} years total career)\n"
+                    f"Line 7: Certified Net Monthly Salary: {verified_income:,.0f} EUR\n"
+                    f"Line 8: Salary encumbrances / garnishments: 0.00 EUR (Clean payroll record)"
+                ),
+                created_at=created_dt + timedelta(minutes=16),
+            )
+
+            doc4 = Document(
+                case_id=c.id,
+                doc_code="doc-4",
+                file_name=f"Bank_Account_Statement_3M_{case_num}.pdf",
+                document_type="Bank Statement",
+                file_size_kb=420 + (idx % 150),
+                page_count=3,
+                status="verified",
+                content_text=(
+                    f"Line 1: CONSOLIDATED 3-MONTH CURRENT ACCOUNT STATEMENT — CASE #{case_num}\n"
+                    f"Line 2: Account Holder: {full_name} | National ID: {nat_id}\n"
+                    f"Line 3: IBAN: {iban} | Currency: EUR\n"
+                    f"Line 4: ------------------------------------------------------------------\n"
+                    f"Line 5: Month -3 Salary Credit ({emp_name}): +{verified_income:,.2f} EUR\n"
+                    f"Line 6: Month -2 Salary Credit ({emp_name}): +{verified_income:,.2f} EUR\n"
+                    f"Line 7: Month -1 Salary Credit ({emp_name}): +{verified_income:,.2f} EUR\n"
+                    f"Line 8: Average Monthly Salary Inflow: {verified_income:,.0f} EUR\n"
+                    f"Line 9: External Credit Bureau Monthly Debt Service: {existing_debts:,.2f} EUR\n"
+                    f"Line 10: Closing Account Balance: {closing_balance:,.2f} EUR"
+                ),
+                created_at=created_dt + timedelta(minutes=24),
+            )
+
+            extra_doc_type = product["extra_doc_type"]
+            if scenario_tag == "expired_id_case":
+                extra_doc_type = "Utility Bill"
+
+            if extra_doc_type == "Utility Bill":
+                util_address = (
+                    f"{house_no + 55} Panorama Hill Rd, {city}"
+                    if scenario_tag == "expired_id_case"
+                    else address
+                )
+                doc5 = Document(
+                    case_id=c.id,
+                    doc_code="doc-5",
+                    file_name=f"Residential_Utility_Invoice_{case_num}.pdf",
+                    document_type="Utility Bill",
+                    file_size_kb=145,
+                    page_count=1,
+                    status="flagged" if scenario_tag == "expired_id_case" else "verified",
+                    content_text=(
+                        f"Line 1: ELECTRICITY & GAS UTILITY STATEMENT — SUBSCRIBER #{910000 + idx}\n"
+                        f"Line 2: Account Holder: {full_name} | National ID: {nat_id}\n"
+                        f"Line 3: Service Location Address: {util_address}\n"
+                        f"Line 4: Billing Cycle: October 2026 | Total Due: {115 + (idx % 140)}.40 EUR\n"
+                        f"Line 5: Direct Debit Status: ACTIVE"
+                    ),
+                    created_at=created_dt + timedelta(minutes=30),
+                )
+            elif extra_doc_type == "Collateral Valuation Report":
+                property_val = round(requested_amount * rng.uniform(1.25, 1.55), -3)
+                ltv_pct = round((requested_amount / property_val) * 100.0, 1)
+                doc5 = Document(
+                    case_id=c.id,
+                    doc_code="doc-5",
+                    file_name=f"ANEVAR_Property_Valuation_{case_num}.pdf",
+                    document_type="Collateral Valuation Report",
+                    file_size_kb=640,
+                    page_count=6,
+                    status="verified",
+                    content_text=(
+                        f"Line 1: CERTIFIED REAL ESTATE COLLATERAL VALUATION REPORT (ANEVAR / RICS STANDARD)\n"
+                        f"Line 2: Applicant Name: {full_name} | National ID: {nat_id}\n"
+                        f"Line 3: Mortgaged Property Address: {address}\n"
+                        f"Line 4: Appraised Market Value: {property_val:,.0f} EUR | Loan-to-Value (LTV): {ltv_pct}%\n"
+                        f"Line 5: Land Book / Cadastre Excerpt: Clean title, 0 prior mortgages, PAD & All-Risk Insurance mandatory"
+                    ),
+                    created_at=created_dt + timedelta(minutes=30),
+                )
+            else:
+                doc5 = Document(
+                    case_id=c.id,
+                    doc_code="doc-5",
+                    file_name=f"Credit_Bureau_And_KYC_Clearance_{case_num}.pdf",
+                    document_type="Credit Bureau Report",
+                    file_size_kb=195,
+                    page_count=2,
+                    status="verified",
+                    content_text=(
+                        f"Line 1: CENTRAL CREDIT BUREAU & AML/KYC COMPLIANCE DOSSIER — #{case_num}\n"
+                        f"Line 2: Applicant Name: {full_name} | National ID: {nat_id}\n"
+                        f"Line 3: FICO Score: {fico} / 850 | Bureau Classification: {cb_status}\n"
+                        f"Line 4: Active External Loans: {active_loans_count} | Monthly Obligations: {existing_debts:,.0f} EUR\n"
+                        f"Line 5: PEP & Sanctions Screening: {pep_status} | {aml_status}"
+                    ),
+                    created_at=created_dt + timedelta(minutes=30),
+                )
+
+            db.add_all([doc1, doc2, doc3, doc4, doc5])
+
+            task_status = "completed" if status == "completed" else ("pending" if status == "pending" else "in_progress")
+            if scenario_tag == "discrepancy_case":
+                t_title = f"Reconcile income/identity discrepancy on Case #{case_num} (€{base_income:,.0f} vs €{verified_income:,.0f})"
+            elif scenario_tag == "expired_id_case":
+                t_title = f"Follow up on expired ID card ({id_series}) and utility bill address for {full_name}"
+            elif scenario_tag == "high_dti_case":
+                t_title = f"Review NBR Reg. 17/2012 DTI exception ({dti_pct}% > 40%) for {full_name}"
+            else:
+                t_title = f"Complete final underwriting sign-off for {full_name} ({product['case_type']})"
+
+            db.add(
+                Task(
+                    case_id=c.id,
+                    title=t_title,
+                    status=task_status,
+                    priority=priority,
+                    assigned_to=officer,
+                    due_date=created_dt + timedelta(days=3),
+                    created_at=created_dt + timedelta(minutes=35),
+                )
+            )
+
+            db.add(
+                AuditLog(
+                    case_id=c.id,
+                    action="Credit Dossier Registered & KYC Initialized",
+                    performed_by=channel,
+                    details=(
+                        f"Case #{case_num} ({product['case_type']}) registered at {branch} with 5 supporting documents "
+                        f"(Application, ID Card, Employer Certificate, 3M Bank Statement, {extra_doc_type})."
+                    ),
+                    timestamp=created_dt,
+                )
+            )
+            db.add(
+                AuditLog(
+                    case_id=c.id,
+                    action="Credit Bureau, ANAF & AML Screening Completed",
+                    performed_by="Automated Risk Engine",
+                    details=(
+                        f"FICO Score {fico} ({cb_status}). AML/PEP: {aml_status}. "
+                        f"Calculated installment €{monthly_inst:,.2f}/mo (DTI: {dti_pct}%)."
+                    ),
+                    timestamp=created_dt + timedelta(hours=1),
+                )
+            )
+            new_clients_data.append(cl)
+
+    if new_clients_data:
+        db.commit()
+        print(f"Seeded {len(new_clients_data)} additional unique client banking dossiers!")
+
+
 def seed_database(db: Session):
     if db.query(Case).first():
+        seed_extended_bank_dossiers(db)
         return
 
     print("Seeding initial BankDesk & Raiffeisen AI Copilot demo data (English)...")
@@ -599,6 +1265,7 @@ def seed_database(db: Session):
         db.add(d)
 
     db.commit()
+    seed_extended_bank_dossiers(db)
     print("Database successfully seeded with English BankDesk & AI Copilot demo data!")
 
 

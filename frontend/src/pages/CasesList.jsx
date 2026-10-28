@@ -119,7 +119,7 @@ export default function CasesList() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Case Portfolio
+            Case Portfolio ({cases.length})
           </h1>
           <p className="text-sm text-slate-400 mt-1">
             Departmental loan and underwriting pipeline

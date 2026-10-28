@@ -15,7 +15,7 @@ router = APIRouter(prefix="/clients", tags=["Clients"])
 @router.get("", response_model=List[ClientOut])
 def get_clients(
     search: Optional[str] = Query(None, description="Search by name, National ID or email"),
-    limit: int = 50,
+    limit: int = 300,
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
