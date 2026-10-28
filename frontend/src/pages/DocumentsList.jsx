@@ -1,130 +1,102 @@
-import React, { useEffect, useState } from 'react';
-import { FileText, Eye, X, Folder, Calendar } from 'lucide-react';
-import { fetchDocuments } from '../api/client';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FileText } from 'lucide-react';
+import { fetchDocuments } from '../api/client';
+import { useAsync } from '../lib/useAsync';
+import { dateTime, humanize, number, relative } from '../lib/format';
+import { Badge, Button, Dialog, EmptyState, ErrorState, PageHeader, SkeletonRows } from '../components/ui';
+
+const STATUS_TONE = { expired: 'danger', flagged: 'warning', verified: 'success' };
+const stripPrefix = (line) => line.replace(/^Line\s+\d+\s*:\s?/, '');
 
 export default function DocumentsList() {
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDoc, setSelectedDoc] = useState(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const data = await fetchDocuments();
-        setDocuments(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  const { data: docs, loading, error, reload } = useAsync(() => fetchDocuments(), []);
+  const [open, setOpen] = useState(null);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">
-          Registered Documents
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Supporting verification files and applicant records attached to credit files
-        </p>
-      </div>
+    <div className="animate-fade-in">
+      <PageHeader title="Documents" description={docs ? `${number(docs.length)} files attached to cases` : 'Files attached to cases'} />
 
-      {loading ? (
-        <div className="p-12 text-center text-slate-400 text-sm">
-          Loading document repository...
-        </div>
-      ) : documents.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3">
-          <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-slate-400 text-sm">No documents found in the system.</p>
-        </div>
+      {error && !docs ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : loading && !docs ? (
+        <SkeletonRows rows={8} />
+      ) : docs.length === 0 ? (
+        <EmptyState icon={FileText} title="No documents yet" description="Documents attached to a case appear here." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-[#1e3358] transition-all flex flex-col justify-between space-y-4 shadow-sm"
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-blue-950/40 border border-blue-900/40 flex items-center justify-center text-blue-400">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-                    {doc.file_size_kb} KB
-                  </span>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-white truncate" title={doc.file_name}>
-                    {doc.file_name}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Type: <span className="text-slate-300 font-medium">{doc.document_type}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-[#142036] flex items-center justify-between">
-                <Link
-                  to={`/cases/${doc.case_id}`}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  <Folder className="w-3.5 h-3.5" />
-                  <span>View Case</span>
-                </Link>
-
-                <button
-                  onClick={() => setSelectedDoc(doc)}
-                  className="px-3 py-1.5 rounded-lg bg-[#111c33] border border-[#1e2f50] text-xs font-medium text-slate-200 hover:bg-blue-600 hover:text-white transition-all flex items-center gap-1.5"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Content</span>
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-fg-subtle border-b border-line">
+                <th scope="col" className="font-medium py-2.5 pl-4 sm:pl-0 pr-4">Document</th>
+                <th scope="col" className="font-medium py-2.5 pr-4">Status</th>
+                <th scope="col" className="font-medium py-2.5 pr-4 text-right">Size</th>
+                <th scope="col" className="font-medium py-2.5 pr-4 text-right">Added</th>
+                <th scope="col" className="py-2.5 pr-4 sm:pr-0"><span className="sr-only">Case</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.id} className="border-b border-line last:border-0 hover:bg-surface">
+                  <td className="py-3 pl-4 sm:pl-0 pr-4 max-w-[360px]">
+                    <button type="button" onClick={() => setOpen(d)} className="text-left group">
+                      <span className="block font-medium group-hover:underline underline-offset-2 decoration-fg-subtle">{d.document_type}</span>
+                      <span className="block text-xs text-fg-subtle truncate" title={d.file_name}>
+                        {d.file_name}
+                      </span>
+                    </button>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Badge tone={STATUS_TONE[d.status] || 'neutral'}>{humanize(d.status)}</Badge>
+                  </td>
+                  <td className="py-3 pr-4 text-right tabular text-fg-muted">{number(d.file_size_kb)} KB</td>
+                  <td className="py-3 pr-4 text-right text-fg-muted whitespace-nowrap" title={dateTime(d.created_at)}>
+                    {relative(d.created_at)}
+                  </td>
+                  <td className="py-3 pr-4 sm:pr-0 text-right">
+                    <Link to={`/cases/${d.case_id}`} className="text-[13px] text-fg-muted hover:text-fg whitespace-nowrap">
+                      Open case
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {selectedDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-semibold text-white">{selectedDoc.file_name}</h3>
-                <p className="text-xs text-slate-400">{selectedDoc.document_type}</p>
-              </div>
-              <button onClick={() => setSelectedDoc(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                Extracted Text Content:
-              </span>
-              <pre className="p-4 rounded-xl bg-[#050811] border border-[#192742] text-xs text-slate-200 font-mono whitespace-pre-wrap max-h-96 overflow-y-auto leading-relaxed">
-                {selectedDoc.content_text || 'No OCR/text content pre-extracted for this file.'}
-              </pre>
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setSelectedDoc(null)}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={Boolean(open)}
+        onClose={() => setOpen(null)}
+        size="lg"
+        title={open?.document_type}
+        description={open?.file_name}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(null)}>
+              Close
+            </Button>
+            {open && (
+              <Link to={`/cases/${open.case_id}`} className="h-9 px-3.5 inline-flex items-center rounded-md bg-raised border border-line text-sm font-medium hover:bg-hover">
+                Open case
+              </Link>
+            )}
+          </>
+        }
+      >
+        {open?.content_text ? (
+          <ol className="font-mono text-[12.5px] leading-6 rounded-md border border-line bg-canvas py-2">
+            {open.content_text.split('\n').map((line, i) => (
+              <li key={i} className="flex gap-4 pr-4">
+                <span className="w-9 shrink-0 text-right text-fg-subtle select-none">{i + 1}</span>
+                <span className="text-fg-muted whitespace-pre-wrap break-words min-w-0">{stripPrefix(line) || ' '}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-fg-muted">This file has no extracted text.</p>
+        )}
+      </Dialog>
     </div>
   );
 }

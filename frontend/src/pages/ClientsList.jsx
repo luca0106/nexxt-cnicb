@@ -1,271 +1,210 @@
-import { Link } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
-import { Users, Search, Plus, Phone, Mail, Building, CreditCard, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, Users, X, ArrowRight } from 'lucide-react';
 import { fetchClients, createClient } from '../api/client';
+import { useAsync } from '../lib/useAsync';
+import { money, number, text } from '../lib/format';
+import { Avatar, Button, Dialog, EmptyState, ErrorState, Field, Input, PageHeader, SkeletonRows, useToast } from '../components/ui';
+
+function useDebounced(value, delay = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return v;
+}
 
 export default function ClientsList() {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState('');
+  const query = useDebounced(search.trim());
+  const [creating, setCreating] = useState(false);
+  const { data: clients, loading, error, reload } = useAsync(() => fetchClients(query), [query]);
 
-  // Form state
-  const [fullName, setFullName] = useState('');
-  const [nationalId, setNationalId] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [employer, setEmployer] = useState('');
-  const [income, setIncome] = useState('5000');
+  return (
+    <div className="animate-fade-in">
+      <PageHeader
+        title="Clients"
+        description={clients ? `${number(clients.length)} ${query ? 'matching' : 'registered'}` : 'Client directory'}
+        actions={
+          <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>
+            New client
+          </Button>
+        }
+      />
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchClients(searchTerm);
-      setClients(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      <div className="relative sm:w-80 mb-4">
+        <Search className="w-4 h-4 text-fg-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Name, national ID or email"
+          aria-label="Search clients"
+          className="w-full h-9 pl-9 pr-8 rounded-md bg-surface border border-line text-sm placeholder:text-fg-subtle focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent [&::-webkit-search-cancel-button]:hidden"
+        />
+        {search && (
+          <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 inline-flex items-center justify-center rounded text-fg-subtle hover:text-fg">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {error && !clients ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : loading && !clients ? (
+        <SkeletonRows rows={8} />
+      ) : clients.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={query ? 'No clients match this search' : 'No clients yet'}
+          description={query ? 'Check the spelling or search by national ID.' : 'Register a client to open their first case.'}
+          action={
+            query ? (
+              <Button onClick={() => setSearch('')}>Clear search</Button>
+            ) : (
+              <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>
+                New client
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <div className={`overflow-x-auto -mx-4 sm:mx-0 ${loading ? 'opacity-60' : ''}`}>
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-fg-subtle border-b border-line">
+                <th scope="col" className="font-medium py-2.5 pl-4 sm:pl-0 pr-4">Client</th>
+                <th scope="col" className="font-medium py-2.5 pr-4">Contact</th>
+                <th scope="col" className="font-medium py-2.5 pr-4 hidden lg:table-cell">Employer</th>
+                <th scope="col" className="font-medium py-2.5 pr-4 text-right">Net income</th>
+                <th scope="col" className="py-2.5 pr-4 sm:pr-0"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((c) => (
+                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface">
+                  <td className="py-3 pl-4 sm:pl-0 pr-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar name={c.full_name} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{text(c.full_name)}</p>
+                        <p className="text-xs text-fg-subtle font-mono">{text(c.national_id)}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4 max-w-[240px]">
+                    <p className="truncate text-fg-muted" title={c.email || undefined}>{text(c.email)}</p>
+                    <p className="text-xs text-fg-subtle">{text(c.phone)}</p>
+                  </td>
+                  <td className="py-3 pr-4 text-fg-muted hidden lg:table-cell max-w-[220px] truncate">{text(c.employer)}</td>
+                  <td className="py-3 pr-4 text-right tabular">{money(c.monthly_income)}</td>
+                  <td className="py-3 pr-4 sm:pr-0 text-right">
+                    <Link to={`/clients/${c.id}/finances`} className="inline-flex items-center gap-1 text-[13px] text-fg-muted hover:text-fg whitespace-nowrap">
+                      Finances <ArrowRight className="w-3.5 h-3.5" aria-hidden />
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <NewClientDialog open={creating} onClose={() => setCreating(false)} onCreated={reload} />
+    </div>
+  );
+}
+
+const EMPTY = { full_name: '', national_id: '', email: '', phone: '', employer: '', address: '', monthly_income: '' };
+
+function NewClientDialog({ open, onClose, onCreated }) {
+  const toast = useToast();
+  const [form, setForm] = useState(EMPTY);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadData();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+    if (open) {
+      setForm(EMPTY);
+      setErrors({});
+    }
+  }, [open]);
 
-  const handleCreate = async (e) => {
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = async (e) => {
     e.preventDefault();
+    const next = {};
+    if (!form.full_name.trim()) next.full_name = 'Enter the client’s full legal name.';
+    if (!/^\d{13}$/.test(form.national_id.trim())) next.national_id = 'The national ID has 13 digits.';
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = 'Enter a valid email address.';
+    if (form.phone && !/^\+?[\d\s()-]{7,20}$/.test(form.phone.trim())) next.phone = 'Enter a valid phone number.';
+    if (form.monthly_income !== '' && !(Number(form.monthly_income) >= 0)) next.monthly_income = 'Enter 0 or more.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    setSaving(true);
     try {
       await createClient({
-        full_name: fullName,
-        national_id: nationalId,
-        email: email,
-        phone: phone,
-        address: address,
-        employer: employer,
-        monthly_income: parseFloat(income) || 0,
+        full_name: form.full_name.trim(),
+        national_id: form.national_id.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        employer: form.employer.trim(),
+        address: form.address.trim(),
+        monthly_income: Number(form.monthly_income) || 0,
       });
-      setShowModal(false);
-      setFullName('');
-      setNationalId('');
-      setEmail('');
-      setPhone('');
-      setAddress('');
-      setEmployer('');
-      loadData();
+      toast({ tone: 'success', title: `${form.full_name.trim()} registered`, description: 'You can now open a case for this client.' });
+      onClose();
+      onCreated();
     } catch (err) {
-      alert('Error registering client.');
+      setErrors({ national_id: 'The client could not be saved. This national ID may already be registered.' });
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Bank Clients ({clients.length})
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Registered customer directory in the internal banking system
-          </p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-all shadow-lg shadow-blue-600/20 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Client</span>
-        </button>
-      </div>
-
-      <div className="bg-[#090f1e] p-4 rounded-2xl border border-[#142036]">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, National ID, email..."
-            className="w-full bg-[#050811] border border-[#192742] rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="p-12 text-center text-slate-400 text-sm">
-          Loading client directory...
-        </div>
-      ) : clients.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3">
-          <Users className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-slate-400 text-sm">No clients found matching the query.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {clients.map((c) => (
-            <div
-              key={c.id}
-              className="p-5 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-[#1e3358] transition-all space-y-4 shadow-sm"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
-                    {c.full_name.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">
-                      {c.full_name}
-                    </h3>
-                    <p className="text-xs text-slate-400 font-mono">
-                      ID: {c.national_id || c.cnp}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-300">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{c.email || 'No email provided'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span>{c.phone || 'No phone provided'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{c.employer || 'Unspecified employer'}</span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-[#142036] flex items-center justify-between text-xs">
-                <span className="text-slate-400">Declared net income:</span>
-                <span className="font-semibold text-emerald-400 font-mono">
-                  {c.monthly_income?.toLocaleString()} RON
-                </span>
-              </div>
-              <Link to={`/clients/${c.id}/finances`} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-sm text-blue-300 hover:bg-blue-500/20 transition-colors">
-                <CreditCard className="w-4 h-4" /> Financial profile
-              </Link>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#0b1224] border border-[#1d2d4c] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-semibold text-white">Register New Client</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. John Miller"
-                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">National ID / Tax ID</label>
-                  <input
-                    type="text"
-                    required
-                    value={nationalId}
-                    onChange={(e) => setNationalId(e.target.value)}
-                    placeholder="1890101..."
-                    className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Monthly Income (RON)</label>
-                  <input
-                    type="number"
-                    value={income}
-                    onChange={(e) => setIncome(e.target.value)}
-                    className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="client@example.com"
-                    className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Phone</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+40 7..."
-                    className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Employer / Company</label>
-                <input
-                  type="text"
-                  value={employer}
-                  onChange={(e) => setEmployer(e.target.value)}
-                  placeholder="e.g. Acme Tech Corp"
-                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Residential Address</label>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. 14 Elm Street, Bucharest"
-                  className="w-full bg-[#050811] border border-[#192742] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-sm font-medium text-white transition-colors"
-                >
-                  Save Client
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="New client"
+      description="Only the name and national ID are required."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="new-client-form" loading={saving}>
+            Register client
+          </Button>
+        </>
+      }
+    >
+      <form id="new-client-form" onSubmit={submit} noValidate className="grid sm:grid-cols-2 gap-x-4">
+        <Field label="Full name" required error={errors.full_name} className="sm:col-span-2">
+          <Input value={form.full_name} onChange={set('full_name')} autoComplete="off" autoFocus />
+        </Field>
+        <Field label="National ID" required error={errors.national_id}>
+          <Input value={form.national_id} onChange={set('national_id')} inputMode="numeric" maxLength={13} className="font-mono" />
+        </Field>
+        <Field label="Net monthly income (EUR)" error={errors.monthly_income}>
+          <Input type="number" inputMode="decimal" min="0" value={form.monthly_income} onChange={set('monthly_income')} />
+        </Field>
+        <Field label="Email" error={errors.email}>
+          <Input type="email" inputMode="email" value={form.email} onChange={set('email')} autoComplete="off" />
+        </Field>
+        <Field label="Phone" error={errors.phone}>
+          <Input type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} autoComplete="off" />
+        </Field>
+        <Field label="Employer" className="sm:col-span-2">
+          <Input value={form.employer} onChange={set('employer')} />
+        </Field>
+        <Field label="Address" className="sm:col-span-2">
+          <Input value={form.address} onChange={set('address')} />
+        </Field>
+      </form>
+    </Dialog>
   );
 }

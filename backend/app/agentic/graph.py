@@ -268,7 +268,7 @@ def _assemble(run: AgentRun, llm: LLM, t0: float) -> Dict[str, Any]:
                            f"#{case_obj.case_number} we need {requested or 'a quick clarification'}. "
                            f"Secure link: {link}"),
             "emailSubject": f"[Action Required] Case #{case_obj.case_number} — Raiffeisen Bank",
-            "emailBody": f"{run.message_to_client}\n\nSecure upload link:\n👉 {link}",
+            "emailBody": f"{run.message_to_client}\n\nSecure upload link:\n{link}",
         }
 
     checklist = list(workflow["checklist"])

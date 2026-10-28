@@ -1,85 +1,50 @@
-import React, { useEffect, useState } from 'react';
-import { History, Clock, Folder } from 'lucide-react';
-import { fetchHistory } from '../api/client';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import { History } from 'lucide-react';
+import { fetchHistory } from '../api/client';
+import { useAsync } from '../lib/useAsync';
+import { dateTime, number, relative, stripEmoji, text } from '../lib/format';
+import { EmptyState, ErrorState, PageHeader, SkeletonRows } from '../components/ui';
 
 export default function HistoryList() {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const data = await fetchHistory();
-        setHistory(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  const { data: entries, loading, error, reload } = useAsync(() => fetchHistory(), []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">
-          Activity Audit Log
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Complete regulatory audit trail of all operational actions and agent executions
-        </p>
-      </div>
+    <div className="animate-fade-in max-w-4xl">
+      <PageHeader
+        title="Audit log"
+        description={entries ? `${number(entries.length)} recorded actions by officers and the AI review` : 'Every action on every case'}
+      />
 
-      {loading ? (
-        <div className="p-12 text-center text-slate-400 text-sm">
-          Loading audit log...
-        </div>
-      ) : history.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-[#090f1e] border border-[#142036] space-y-3">
-          <History className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-slate-400 text-sm">No activity recorded yet in the audit log.</p>
-        </div>
+      {error && !entries ? (
+        <ErrorState error={error} onRetry={reload} />
+      ) : loading && !entries ? (
+        <SkeletonRows rows={10} />
+      ) : entries.length === 0 ? (
+        <EmptyState icon={History} title="Nothing recorded yet" description="Changes to cases and AI reviews are logged here automatically." />
       ) : (
-        <div className="space-y-3 max-w-4xl">
-          {history.map((h) => (
-            <div
-              key={h.id}
-              className="p-4 rounded-2xl bg-[#090f1e] border border-[#142036] flex items-start gap-4 shadow-sm"
-            >
-              <div className="w-9 h-9 rounded-xl bg-blue-950/40 border border-blue-900/50 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
-                <Clock className="w-4 h-4" />
-              </div>
-              <div className="flex-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-white text-sm">
-                    {h.action}
-                  </span>
-                  <span className="text-slate-500 font-mono">
-                    {new Date(h.timestamp).toLocaleString('en-US')}
-                  </span>
-                </div>
-                <p className="text-slate-300 mt-1">
-                  {h.details}
-                </p>
-                <div className="flex items-center gap-4 mt-2 text-[11px] text-slate-500">
-                  <span>User: <strong className="text-slate-400 font-medium">{h.performed_by}</strong></span>
-                  {h.case_id && (
-                    <Link
-                      to={`/cases/${h.case_id}`}
-                      className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                    >
-                      <Folder className="w-3 h-3" />
-                      <span>View Case #{h.case_id}</span>
+        <ol className="divide-y divide-line">
+          {entries.map((h) => (
+            <li key={h.id} className="py-3.5 grid sm:grid-cols-[1fr_auto] gap-x-6 gap-y-0.5">
+              <p className="text-sm font-medium">{stripEmoji(h.action)}</p>
+              <time className="sm:row-start-1 sm:col-start-2 text-xs text-fg-subtle whitespace-nowrap" dateTime={h.timestamp} title={dateTime(h.timestamp)}>
+                {relative(h.timestamp)}
+              </time>
+              {h.details && <p className="text-[13px] text-fg-muted break-words">{stripEmoji(h.details)}</p>}
+              <p className="text-xs text-fg-subtle">
+                {text(h.performed_by)}
+                {h.case_id && (
+                  <>
+                    {' · '}
+                    <Link to={`/cases/${h.case_id}`} className="text-fg-muted hover:text-fg underline-offset-2 hover:underline">
+                      Open case
                     </Link>
-                  )}
-                </div>
-              </div>
-            </div>
+                  </>
+                )}
+              </p>
+            </li>
           ))}
-        </div>
+        </ol>
       )}
     </div>
   );

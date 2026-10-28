@@ -380,7 +380,7 @@ def resolve_finding_human_in_the_loop(
             )
             for f_item in findings:
                 if f_item.get("id") == "finding-dti-check":
-                    f_item["title"] = f"🟢 Recalculated Debt-to-Income (Python): {feasibility_math['dti_percentage']}% (Max: 40%)"
+                    f_item["title"] = f"Recalculated Debt-to-Income (Python): {feasibility_math['dti_percentage']}% (Max: 40%)"
                     f_item["description"] = (
                         f"Recalculated for officer-validated income (€{int(new_income)}): "
                         f"Installment €{feasibility_math['calculated_monthly_installment']} -> DTI {feasibility_math['dti_percentage']}%."

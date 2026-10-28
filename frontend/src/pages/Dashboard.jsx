@@ -1,184 +1,73 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Folder, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Folder } from 'lucide-react';
 import { fetchStats } from '../api/client';
+import { useAsync } from '../lib/useAsync';
+import { number } from '../lib/format';
+import { PageHeader, Section, Skeleton, SkeletonRows, EmptyState, ErrorState } from '../components/ui';
+import CaseTable from '../components/CaseTable';
+
+const FIGURES = [
+  { key: 'to_verify', label: 'Waiting for review', status: 'in_review', tone: 'text-warning' },
+  { key: 'in_progress', label: 'In progress', status: 'in_progress', tone: 'text-fg' },
+  { key: 'pending', label: 'Waiting for client', status: 'pending', tone: 'text-fg' },
+  { key: 'completed', label: 'Completed', status: 'completed', tone: 'text-fg' },
+];
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { data: stats, loading, error, reload } = useAsync(fetchStats, []);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchStats();
-      setStats(data);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to load departmental statistics from server.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'in_review':
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#2e1906] text-[#f97316] border border-[#7c2d12]/60">
-            In review
-          </span>
-        );
-      case 'completed':
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#052e16] text-[#22c55e] border border-[#14532d]/60">
-            Completed
-          </span>
-        );
-      case 'pending':
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#1e293b] text-[#cbd5e1] border border-[#334155]/60">
-            Pending
-          </span>
-        );
-      case 'in_progress':
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#0f2347] text-[#38bdf8] border border-[#1e3a8a]/60">
-            In progress
-          </span>
-        );
-      case 'rejected':
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-[#3b0b14] text-[#f87171] border border-[#7f1d1d]/60">
-            Rejected
-          </span>
-        );
-      default:
-        return (
-          <span className="px-3.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
-            {status}
-          </span>
-        );
-    }
-  };
+  if (error && !stats) {
+    return (
+      <>
+        <PageHeader title="Overview" />
+        <ErrorState error={error} onRetry={reload} />
+      </>
+    );
+  }
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Title section matching screenshot */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Active Cases
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Department activity overview
-          </p>
-        </div>
-        <button
-          onClick={loadData}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0e1626] border border-[#1a2842] hover:bg-[#152037] text-xs text-slate-300 transition-colors cursor-pointer"
-          title="Refresh Statistics"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
-      </div>
+    <div className="animate-fade-in">
+      <PageHeader title="Overview" description="Retail Lending · your case pipeline" />
 
-      {error && (
-        <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/50 text-red-300 text-sm flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Metric Cards - 2 Cards side by side like screenshot */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
-        {/* Card 1: In progress */}
-        <div 
-          onClick={() => navigate('/cases?status=in_progress')}
-          className="p-6 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-blue-500/30 transition-all cursor-pointer group shadow-sm"
-        >
-          <div className="text-sm font-normal text-slate-400">
-            In progress
-          </div>
-          <div className="text-4xl md:text-5xl font-bold text-[#2563eb] mt-3 group-hover:scale-105 transition-transform duration-200">
-            {loading && !stats ? '...' : (stats?.in_progress ?? 24)}
-          </div>
-        </div>
-
-        {/* Card 2: To verify */}
-        <div 
-          onClick={() => navigate('/cases?status=in_review')}
-          className="p-6 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-amber-500/30 transition-all cursor-pointer group shadow-sm"
-        >
-          <div className="text-sm font-normal text-slate-400">
-            To verify
-          </div>
-          <div className="text-4xl md:text-5xl font-bold text-[#d97706] mt-3 group-hover:scale-105 transition-transform duration-200">
-            {loading && !stats ? '...' : (stats?.to_verify ?? 7)}
-          </div>
-        </div>
-      </div>
-
-      {/* Section: Recent Cases */}
-      <div className="space-y-4 max-w-2xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white tracking-tight">
-            Recent Cases
-          </h2>
-          <button
-            onClick={() => navigate('/cases')}
-            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors cursor-pointer"
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-lg overflow-hidden border border-line bg-line">
+        {FIGURES.map((f) => (
+          <Link
+            key={f.key}
+            to={`/cases?status=${f.status}`}
+            className="group p-4 sm:p-5 bg-surface hover:bg-raised transition-colors"
           >
-            View all cases
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {loading && !stats ? (
-            <div className="p-8 text-center text-slate-500 text-sm">
-              Loading cases...
-            </div>
-          ) : stats?.recent_cases && stats.recent_cases.length > 0 ? (
-            stats.recent_cases.map((c) => (
-              <div
-                key={c.id}
-                onClick={() => navigate(`/cases/${c.id}`)}
-                className="p-4 rounded-2xl bg-[#090f1e] border border-[#142036] hover:border-[#1e3256] hover:bg-[#0c1428] transition-all cursor-pointer flex items-center justify-between group shadow-sm"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-xl bg-blue-950/40 border border-blue-900/40 flex items-center justify-center text-blue-400 group-hover:text-blue-300 transition-colors">
-                    <Folder className="w-5 h-5 stroke-[1.8]" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white group-hover:text-blue-400 transition-colors">
-                      Case #{c.case_number}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {c.title}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  {getStatusBadge(c.status)}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="p-8 text-center text-slate-500 text-sm rounded-2xl bg-[#090f1e] border border-[#142036]">
-              No recent cases recorded.
-            </div>
-          )}
-        </div>
+            <p className="text-[13px] text-fg-muted">{f.label}</p>
+            {loading && !stats ? (
+              <Skeleton className="h-8 w-16 mt-2" />
+            ) : (
+              <p className={`mt-1 text-3xl font-semibold tabular ${f.tone}`}>{number(stats?.[f.key])}</p>
+            )}
+            <p className="mt-2 text-xs text-fg-subtle group-hover:text-fg-muted flex items-center gap-1">
+              View cases <ArrowRight className="w-3 h-3" aria-hidden />
+            </p>
+          </Link>
+        ))}
       </div>
+
+      <Section
+        className="mt-10"
+        title="Recent cases"
+        description={stats ? `${number(stats.total_cases)} cases in total` : undefined}
+        actions={
+          <Link to="/cases" className="text-[13px] text-fg-muted hover:text-fg inline-flex items-center gap-1">
+            All cases <ArrowRight className="w-3.5 h-3.5" aria-hidden />
+          </Link>
+        }
+      >
+        {loading && !stats ? (
+          <SkeletonRows rows={5} />
+        ) : stats?.recent_cases?.length ? (
+          <CaseTable cases={stats.recent_cases} compact />
+        ) : (
+          <EmptyState icon={Folder} title="No cases yet" description="New applications will appear here as soon as they are registered." />
+        )}
+      </Section>
     </div>
   );
 }

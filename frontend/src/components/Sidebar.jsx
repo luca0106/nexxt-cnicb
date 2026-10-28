@@ -1,107 +1,110 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutGrid,
-  Users,
-  Folder,
-  FileText,
-  CheckSquare,
-  History,
-  X
-} from 'lucide-react';
+import { LayoutGrid, Users, Folder, FileText, CheckSquare, History, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Avatar } from './ui';
 
-const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutGrid },
-  { name: 'Clients', path: '/clients', icon: Users },
+const NAV = [
+  { name: 'Overview', path: '/', icon: LayoutGrid },
   { name: 'Cases', path: '/cases', icon: Folder },
+  { name: 'Clients', path: '/clients', icon: Users },
   { name: 'Documents', path: '/documents', icon: FileText },
   { name: 'Tasks', path: '/tasks', icon: CheckSquare },
-  { name: 'Audit Log', path: '/history', icon: History },
+  { name: 'Audit log', path: '/history', icon: History },
 ];
 
-export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
-  const sidebarContent = (collapsedMode) => (
-    <div className="flex flex-col justify-between h-full">
-      <div>
-        <div className="flex items-center justify-between mb-4 px-3">
-          {!collapsedMode && (
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
-              Menu
+export function BrandMark() {
+  return (
+    <span className="w-7 h-7 rounded-md bg-accent flex items-center justify-center shrink-0" aria-hidden>
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="#121212" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 18h14M7 10.5h10M8.5 10.5v5M12 10.5v5M15.5 10.5v5M5.5 9.5 12 5.5l6.5 4" />
+      </svg>
+    </span>
+  );
+}
+
+function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className={`flex items-center h-14 px-3 ${collapsed ? 'justify-center' : 'justify-between'}`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <BrandMark />
+          {!collapsed && <span className="text-[15px] font-semibold text-fg">BankDesk</span>}
+        </div>
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label="Close menu" className="w-8 h-8 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-raised">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      <nav aria-label="Main" className="flex-1 px-2 py-2 space-y-0.5">
+        {NAV.map(({ name, path, icon: Icon }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={path === '/'}
+            onClick={onNavigate}
+            title={collapsed ? name : undefined}
+            className={({ isActive }) =>
+              `flex items-center gap-3 h-9 rounded-md text-sm transition-colors ${collapsed ? 'justify-center' : 'px-2.5'} ${
+                isActive ? 'bg-raised text-fg font-medium' : 'text-fg-muted hover:text-fg hover:bg-raised/60'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-accent' : ''}`} aria-hidden />
+                {!collapsed && <span>{name}</span>}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="p-2 border-t border-line">
+        <div className={`flex items-center gap-2.5 p-1.5 ${collapsed ? 'justify-center' : ''}`}>
+          <Avatar name="Consultant 024" size="sm" />
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-fg truncate">Consultant 024</p>
+              <p className="text-2xs text-fg-subtle truncate">Retail Lending</p>
             </div>
           )}
+        </div>
+        {onToggleCollapse && (
           <button
-            onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white"
-            aria-label="Close menu"
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`mt-1 w-full h-8 flex items-center gap-2 rounded-md text-[13px] text-fg-subtle hover:text-fg hover:bg-raised/60 ${collapsed ? 'justify-center' : 'px-2.5'}`}
           >
-            <X className="w-5 h-5" />
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            {!collapsed && 'Collapse'}
           </button>
-        </div>
-
-        <nav className="space-y-1.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                onClick={onCloseMobile}
-                title={collapsedMode ? item.name : undefined}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#101b33]'
-                  } ${collapsedMode ? 'justify-center px-0' : ''}`
-                }
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                {!collapsedMode && <span>{item.name}</span>}
-              </NavLink>
-            );
-          })}
-        </nav>
+        )}
       </div>
-
-      {!collapsedMode && (
-        <div className="pt-6 border-t border-[#142036]">
-          <div className="p-3.5 rounded-xl bg-[#090f1e] border border-[#142036] text-xs text-slate-400">
-            <span className="block font-medium text-slate-300">Retail Department</span>
-            <span className="text-[11px] text-slate-400">Credit Operations & Triage</span>
-          </div>
-        </div>
-      )}
     </div>
   );
+}
 
+export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed, onToggleCollapse }) {
   return (
     <>
-      {/* Mobile Drawer */}
-      <div
-        className={`fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
-          isMobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={onCloseMobile}
-      >
-        <aside
-          className={`w-64 h-full bg-[#050811] border-r border-[#142036] p-4 transition-transform duration-300 ${
-            isMobileOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {sidebarContent(false)}
-        </aside>
-      </div>
-
-      {/* Desktop Sidebar */}
       <aside
-        className={`hidden lg:block shrink-0 bg-[#050811] border-r border-[#142036] p-4 transition-all duration-300 ${
-          isCollapsed ? 'w-20' : 'w-64'
+        className={`hidden lg:block shrink-0 sticky top-0 h-screen bg-canvas border-r border-line transition-[width] duration-200 ${
+          isCollapsed ? 'w-16' : 'w-60'
         }`}
       >
-        {sidebarContent(isCollapsed)}
+        <SidebarContent collapsed={isCollapsed} onToggleCollapse={onToggleCollapse} />
       </aside>
+
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden bg-black/60 animate-fade-in" onClick={onCloseMobile}>
+          <aside className="w-64 h-full bg-surface border-r border-line" onClick={(e) => e.stopPropagation()}>
+            <SidebarContent collapsed={false} onNavigate={onCloseMobile} onClose={onCloseMobile} />
+          </aside>
+        </div>
+      )}
     </>
   );
 }

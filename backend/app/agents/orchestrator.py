@@ -390,7 +390,7 @@ def run_investigator_agent(
                 "field": "id_card_validity",
                 "fieldLabel": "ID Card Validity",
                 "ruleRef": "PROC-DOC-02",
-                "title": "🔴 Critical Alert: Identity Card Expired",
+                "title": "Critical Alert: Identity Card Expired",
                 "description": (
                     "The national identity card attached to this file expired on 10.02.2026 (prior to the assessment date). "
                     "Under policy PROC-DOC-02, this loan application cannot proceed to final approval until a renewed identity card is uploaded."
@@ -422,7 +422,7 @@ def run_investigator_agent(
             "field": "id_card_validity",
             "fieldLabel": "ID Card Validity",
             "ruleRef": "PROC-DOC-02",
-            "title": "🟢 Identity Card Currently Valid",
+            "title": "Identity Card Currently Valid",
             "description": f"The identity card is fully valid ({v_item['value']}), verified under PROC-DOC-02.",
             "values": [
                 {
@@ -454,7 +454,7 @@ def run_investigator_agent(
             "field": "applicant_name",
             "fieldLabel": "Applicant Name",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🔴 Cross-Check Alert: Name Mismatch Across Documents ({' vs '.join(unique_names)})",
+            "title": f"Cross-Check Alert: Name Mismatch Across Documents ({' vs '.join(unique_names)})",
             "description": (
                 "A given name discrepancy exists between the national ID card / loan application ('John Miller') "
                 "and the employer income certificate ('Jonathan Miller'). Under PROC-KYC-01, this material inconsistency "
@@ -487,7 +487,7 @@ def run_investigator_agent(
             "field": "applicant_name",
             "fieldLabel": "Applicant Name",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🟢 Full Name Consistency Verified ({unique_names[0]})",
+            "title": f"Full Name Consistency Verified ({unique_names[0]})",
             "description": "Applicant full name matches 100% across all provided case documents.",
             "values": [
                 {
@@ -521,7 +521,7 @@ def run_investigator_agent(
             "field": "monthly_income",
             "fieldLabel": "Net Monthly Income",
             "ruleRef": "PROC-INC-03",
-            "title": f"🟠 Monthly Income Discrepancy: {' vs '.join(formatted_vals)}",
+            "title": f"Monthly Income Discrepancy: {' vs '.join(formatted_vals)}",
             "description": (
                 "The net monthly income declared on the Application Form (€5,200) differs from the amount "
                 "certified on the Employer Certificate and verified on the Bank Statement (€5,700). The Copilot highlights "
@@ -556,7 +556,7 @@ def run_investigator_agent(
             "field": "monthly_income",
             "fieldLabel": "Net Monthly Income",
             "ruleRef": "PROC-INC-03",
-            "title": f"🟢 Verified Net Monthly Income: €{int(inc_val):,}",
+            "title": f"Verified Net Monthly Income: €{int(inc_val):,}",
             "description": "Application income corresponds exactly with the employer salary slip and bank statement inflows.",
             "values": [
                 {
@@ -589,7 +589,7 @@ def run_investigator_agent(
             "field": "address",
             "fieldLabel": "Residential Address",
             "ruleRef": "PROC-KYC-01",
-            "title": "🟠 Address Discrepancy: ID Card vs Utility Bill",
+            "title": "Address Discrepancy: ID Card vs Utility Bill",
             "description": (
                 f"The address stated on the identity document ('{unique_addrs[0]}') differs from the service location "
                 f"address on the utility invoice ('{unique_addrs[1]}')."
@@ -621,7 +621,7 @@ def run_investigator_agent(
             "field": "address",
             "fieldLabel": "Residential Address",
             "ruleRef": "PROC-KYC-01",
-            "title": "🟢 Residential Address Consistent Across Documents",
+            "title": "Residential Address Consistent Across Documents",
             "description": f"The address '{unique_addrs[0]}' is identical across all inspected documents.",
             "values": [
                 {
@@ -654,7 +654,7 @@ def run_investigator_agent(
             "field": "national_id",
             "fieldLabel": "National Identification Number",
             "ruleRef": "PROC-KYC-01",
-            "title": f"🟢 National ID Validated on {len(nat_items)} Documents ({unique_nats[0]})",
+            "title": f"National ID Validated on {len(nat_items)} Documents ({unique_nats[0]})",
             "description": "National ID check-digits verified; strictly identical on all submitted files.",
             "values": [
                 {
@@ -686,9 +686,9 @@ def run_investigator_agent(
         "fieldLabel": "Debt-to-Income Ratio (Deterministic Python Engine)",
         "ruleRef": "REG-DTI-04",
         "title": (
-            f"🟢 DTI Compliant with Regulatory Limits: {dti_pct}% (Max Allowed: 40%)"
+            f"DTI Compliant with Regulatory Limits: {dti_pct}% (Max Allowed: 40%)"
             if feasibility_math["is_feasible"]
-            else f"🔴 DTI Exceeds Regulatory Threshold: {dti_pct}% (Max Allowed: 40%)"
+            else f"DTI Exceeds Regulatory Threshold: {dti_pct}% (Max Allowed: 40%)"
         ),
         "description": (
             f"Calculated deterministically in Python: Estimated monthly installment is €{feasibility_math['calculated_monthly_installment']} "
@@ -749,7 +749,7 @@ def run_remediation_and_workflow_agent(
                 f"1. Your uploaded Identity Card expired on 10.02.2026.\n"
                 f"2. Your utility bill address differs from your primary declared residence.\n\n"
                 f"To avoid visiting a bank branch, please upload a clear photo of your renewed Identity Card using this secure encrypted link:\n"
-                f"👉 {secure_link}\n\n"
+                f"{secure_link}\n\n"
                 f"Your file will resume processing automatically as soon as the document is uploaded.\n\n"
                 f"Sincerely,\nRaiffeisen Bank Lending Operations"
             )
@@ -777,7 +777,7 @@ def run_remediation_and_workflow_agent(
                 f"• Your application form states a net income of €5,200, whereas your employer salary slip and bank statement confirm €5,700.\n"
                 f"• Your employer salary slip lists your given name as 'Jonathan Miller' versus 'John Miller' on your ID card.\n\n"
                 f"Please confirm your updated income value or upload a revised employer certificate via your secure link:\n"
-                f"👉 {secure_link}\n\n"
+                f"{secure_link}\n\n"
                 f"Sincerely,\nConsultant 024 — Retail Lending Department"
             )
         }
