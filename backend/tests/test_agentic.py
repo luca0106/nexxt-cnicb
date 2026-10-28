@@ -54,8 +54,13 @@ class AgenticReviewTest(unittest.TestCase):
 
         agent_finding = next(f for f in result["findings"] if f["id"] == "finding-agent-1")
         self.assertEqual(agent_finding["values"][0]["quote"], "Line 2: Issued by: Tech Solutions Ltd, Commercial Reg. FN38921104")
+        self.assertTrue(agent_finding["values"][0]["value"])
+        self.assertTrue(agent_finding["values"][0]["formattedValue"])
         self.assertTrue(any(f["id"] == "finding-income-mismatch" for f in result["findings"]))
+        self.assertTrue(any(f["id"] == "finding-name-mismatch" for f in result["findings"]))
         self.assertEqual(result["feasibilityMath"]["monthly_income_used"], 5200)
+        self.assertEqual(result["feasibilityMath"]["max_allowed_dti_percentage"], 40.0)
+        self.assertIsNotNone(result["feasibilityMath"]["total_monthly_debt_service"])
         self.assertEqual(result["riskScore"], "medium")
         self.assertEqual(result["summary"], "Income and name differ across documents.")
         self.assertEqual(result["metrics"]["agentToolCalls"], 6)
@@ -95,6 +100,49 @@ class AgenticReviewTest(unittest.TestCase):
             raise LLMError("no network")
         with self.assertRaises(LLMError):
             run_agentic_review(self.case, llm=ScriptedLLM([fail]))
+
+    def test_resolve_finding_and_send_email_remediation(self):
+        from unittest.mock import patch
+        from app.routers.ai_copilot import (
+            start_case_analysis,
+            resolve_finding_human_in_the_loop,
+            send_remediation_notification,
+        )
+        from app.schemas import FindingResolutionRequest, RemediationTriggerRequest
+
+        with (
+            patch("app.routers.ai_copilot.agent_available", return_value=False),
+            patch("app.agents.orchestrator.call_aws_ai_gateway", return_value=None),
+            patch("app.agents.modular_agents.call_aws_ai_gateway", return_value=None),
+        ):
+            analysis_resp = start_case_analysis(self.case.id, payload=None, db=self.db)
+            self.assertTrue(analysis_resp.metrics["modularResults"]["unusual_transactions"]["transactionBreakdown"]["salaryInflows"])
+
+            updated_resp = resolve_finding_human_in_the_loop(
+                analysis_resp.analysisId,
+                "finding-income-mismatch",
+                FindingResolutionRequest(action="override_value", resolved_value="5700"),
+                db=self.db,
+            )
+            doc_rec_findings = updated_resp.metrics["modularResults"]["doc_reconciliation"]["findings"]
+            resolved_in_mod = next(f for f in doc_rec_findings if f["id"] == "finding-income-mismatch")
+            self.assertEqual(resolved_in_mod["status"], "resolved_by_officer")
+            self.assertEqual(str(resolved_in_mod["resolvedValue"]), "5700")
+
+            email_resp = send_remediation_notification(
+                analysis_resp.analysisId,
+                RemediationTriggerRequest(
+                    channel="email",
+                    recipient_email="john.miller@example.com",
+                    email_subject="Case #10482 Clarification",
+                    custom_message="Dear John, please confirm your legal name.",
+                ),
+                db=self.db,
+            )
+            self.assertEqual(email_resp.remediation["status"], "sent_by_officer")
+            self.assertEqual(email_resp.remediation["recipientEmail"], "john.miller@example.com")
+            self.assertEqual(email_resp.remediation["emailSubject"], "Case #10482 Clarification")
+            self.assertEqual(email_resp.remediation["emailBody"], "Dear John, please confirm your legal name.")
 
 
 if __name__ == "__main__":

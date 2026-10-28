@@ -226,7 +226,9 @@ class FindingResolutionRequest(BaseModel):
 
 
 class RemediationTriggerRequest(BaseModel):
-    channel: str = "email_and_sms"
+    channel: str = "email"
+    recipient_email: Optional[str] = None
+    email_subject: Optional[str] = None
     custom_message: Optional[str] = None
 
 

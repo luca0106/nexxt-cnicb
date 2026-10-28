@@ -197,15 +197,32 @@ export default function CaseDetail() {
     }
   };
 
-  const handleSelectCitation = (documentId, lineNumber) => {
-    if (!caseData?.documents) return;
-    const foundDoc = caseData.documents.find((d) => d.id === documentId) || caseData.documents[0];
+  const handleSelectCitation = (documentId, lineNumber, quote = null, docCode = null, documentName = null) => {
+    if (!caseData?.documents?.length) return;
+    const foundDoc =
+      caseData.documents.find((d) => d.id === documentId) ||
+      (docCode && caseData.documents.find((d) => d.doc_code === docCode || `doc-${d.id}` === docCode)) ||
+      (documentName && caseData.documents.find((d) => d.file_name === documentName)) ||
+      (quote && caseData.documents.find((d) => (d.content_text || '').includes(quote))) ||
+      caseData.documents[0];
+
+    let resolvedLine = Number(lineNumber) || 1;
+    if (foundDoc?.content_text && quote) {
+      const lines = foundDoc.content_text.split('\n');
+      if (!lines[resolvedLine - 1] || !lines[resolvedLine - 1].includes(quote.slice(0, 20))) {
+        const matchIdx = lines.findIndex((l) => l.includes(quote) || quote.includes(l.trim()));
+        if (matchIdx >= 0) {
+          resolvedLine = matchIdx + 1;
+        }
+      }
+    }
+
     setActiveTab('documents');
     setSelectedDoc(foundDoc);
-    setHighlightedLine(lineNumber);
+    setHighlightedLine(resolvedLine);
 
     setTimeout(() => {
-      const el = document.getElementById(`doc-line-${lineNumber}`);
+      const el = document.getElementById(`doc-line-${resolvedLine}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }

@@ -1,7 +1,10 @@
 import json
 import logging
+import os
+import smtplib
 import uuid
 from datetime import datetime
+from email.message import EmailMessage
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -20,6 +23,7 @@ from ..agents.modular_agents import (
     get_case_agent_catalog,
     execute_single_modular_agent,
     build_client_executive_summary_360,
+    refresh_modular_results_after_resolution,
     AGENT_CATALOG,
 )
 from ..agentic import LLMError, agent_available, run_agentic_review
@@ -349,12 +353,25 @@ def resolve_finding_human_in_the_loop(
     findings = json.loads(analysis.findings_json or "[]")
     feasibility_math = json.loads(analysis.feasibility_math_json or "{}")
     checklist = json.loads(analysis.workflow_checklist_json or "[]")
+    extracted_fields = json.loads(analysis.extracted_fields_json or "[]")
+    metrics_dict = json.loads(analysis.metrics_json or "{}")
 
     target_finding = None
     for f in findings:
         if f.get("id") == finding_id:
             target_finding = f
             break
+
+    if not target_finding:
+        # Also search inside modularResults in case a finding was only stored there
+        for mod in (metrics_dict.get("modularResults") or {}).values():
+            for f in mod.get("findings") or []:
+                if f.get("id") == finding_id:
+                    target_finding = f
+                    findings.append(target_finding)
+                    break
+            if target_finding:
+                break
 
     if not target_finding:
         raise HTTPException(status_code=404, detail="Finding not found.")
@@ -378,18 +395,21 @@ def resolve_finding_human_in_the_loop(
                 loan_term_months=int(case_obj.loan_term_months or 60) if case_obj else 60,
                 annual_interest_rate=float(case_obj.interest_rate_annual or 8.9) if case_obj else 8.9,
             )
+            if case_obj:
+                case_obj.dti_percent = feasibility_math["dti_percentage"]
+                case_obj.monthly_installment = feasibility_math["calculated_monthly_installment"]
             for f_item in findings:
                 if f_item.get("id") == "finding-dti-check":
                     f_item["title"] = f"🟢 Recalculated Debt-to-Income (Python): {feasibility_math['dti_percentage']}% (Max: 40%)"
                     f_item["description"] = (
-                        f"Recalculated for officer-validated income (€{int(new_income)}): "
+                        f"Recalculated for officer-validated income (€{int(new_income):,}): "
                         f"Installment €{feasibility_math['calculated_monthly_installment']} -> DTI {feasibility_math['dti_percentage']}%."
                     )
                     f_item["resolvedValue"] = f"{feasibility_math['dti_percentage']}%"
             for step in checklist:
                 if step.get("step") == 2:
-                    step["status"] = "passed"
-                    step["detail"] = f"Income confirmed by loan officer: €{int(new_income)} (DTI: {feasibility_math['dti_percentage']}%)"
+                    step["status"] = "passed" if feasibility_math["dti_percentage"] <= 40.0 else "failed"
+                    step["detail"] = f"Income confirmed by loan officer: €{int(new_income):,} (DTI: {feasibility_math['dti_percentage']}%)"
 
         elif target_finding.get("field") == "applicant_name" and payload.resolved_value is not None:
             if case_obj and case_obj.client:
@@ -399,6 +419,14 @@ def resolve_finding_human_in_the_loop(
                     step["status"] = "passed"
                     step["detail"] = f"Applicant legal identity confirmed: {payload.resolved_value}"
 
+        elif target_finding.get("field") == "address" and payload.resolved_value is not None:
+            if case_obj and case_obj.client:
+                case_obj.client.address = str(payload.resolved_value)
+            for step in checklist:
+                if step.get("step") == 1:
+                    step["status"] = "passed"
+                    step["detail"] = f"Residential address confirmed by officer: {payload.resolved_value}"
+
     if payload.officer_note:
         target_finding["officerNote"] = payload.officer_note
 
@@ -407,19 +435,31 @@ def resolve_finding_human_in_the_loop(
     analysis.workflow_checklist_json = json.dumps(checklist, ensure_ascii=False)
 
     if case_obj is not None:
-        metrics_dict = json.loads(analysis.metrics_json or "{}")
         remediation = json.loads(analysis.remediation_json or "{}")
-        modular_results = metrics_dict.get("modularResults", {})
-        metrics_dict["clientSummary360"] = build_client_executive_summary_360(
+        modular_results = refresh_modular_results_after_resolution(
+            case_obj=case_obj,
+            extracted_fields=extracted_fields,
+            feasibility_math=feasibility_math,
+            findings=findings,
+            modular_results=metrics_dict.get("modularResults", {}),
+        )
+        metrics_dict["modularResults"] = modular_results
+        metrics_dict["redFlagsCount"] = sum(
+            1 for f in findings
+            if f.get("flagType") == "red_flag" and f.get("status") not in ("resolved_by_officer", "confirmed_by_officer")
+        )
+        summary_360 = build_client_executive_summary_360(
             case_obj=case_obj,
             modular_results=modular_results,
             feasibility_math=feasibility_math,
             findings=findings,
             remediation=remediation,
         )
+        metrics_dict["clientSummary360"] = summary_360
+        analysis.summary = summary_360.get("executiveNarrative", analysis.summary)
         analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
 
-    log = AuditLog(
+    audit_entry = AuditLog(
         case_id=analysis.case_id,
         action=f"Human Review Sign-off ({target_finding.get('fieldLabel', finding_id)})",
         performed_by="Consultant 024",
@@ -429,7 +469,7 @@ def resolve_finding_human_in_the_loop(
         ),
         timestamp=datetime.utcnow()
     )
-    db.add(log)
+    db.add(audit_entry)
     db.commit()
     db.refresh(analysis)
 
@@ -452,9 +492,40 @@ def send_remediation_notification(
     now_str = datetime.utcnow().strftime("%d.%m.%Y %H:%M")
     remediation["status"] = "sent_by_officer"
     remediation["sentAt"] = now_str
+    remediation["channels"] = ["Email"]
+    if payload.recipient_email:
+        remediation["recipientEmail"] = payload.recipient_email.strip()
+    if payload.email_subject:
+        remediation["emailSubject"] = payload.email_subject.strip()
     if payload.custom_message:
         remediation["emailBody"] = payload.custom_message
 
+    # Optional live SMTP dispatch if SMTP_HOST is configured in environment
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = os.getenv("SMTP_FROM", smtp_user or "underwriting@raiffeisen.ro").strip()
+    delivery_mode = "Logged in BankDesk Outbox & Audit Trail"
+
+    if smtp_host and remediation.get("recipientEmail"):
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = remediation.get("emailSubject") or f"Case #{case_obj.case_number if case_obj else analysis.case_id} Clarification"
+            msg["From"] = smtp_from
+            msg["To"] = remediation["recipientEmail"]
+            msg.set_content(remediation.get("emailBody") or "")
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=6) as server:
+                if smtp_user and smtp_pass:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            delivery_mode = f"Dispatched via SMTP ({smtp_host})"
+        except Exception as exc:
+            log.warning("SMTP dispatch failed (%s); email recorded in BankDesk outbox.", exc)
+            delivery_mode = "Logged in BankDesk Outbox (SMTP unavailable)"
+
+    remediation["deliveryMode"] = delivery_mode
     analysis.remediation_json = json.dumps(remediation, ensure_ascii=False)
 
     if case_obj:
@@ -465,17 +536,17 @@ def send_remediation_notification(
             metrics_dict["clientSummary360"]["remediation"] = remediation
             analysis.metrics_json = json.dumps(metrics_dict, ensure_ascii=False)
 
-    log = AuditLog(
+    audit_entry = AuditLog(
         case_id=analysis.case_id,
-        action="Automated Remediation SMS & Email Dispatched",
-        performed_by="Remediation Agent (Approved by Consultant 024)",
+        action="Clarification Email Dispatched to Applicant",
+        performed_by="Consultant 024 (AI Copilot Outreach)",
         details=(
-            f"Customer notification sent to Email ({remediation.get('recipientEmail')}) and SMS ({remediation.get('recipientPhone')}) "
-            f"with secure document upload link: {remediation.get('secureUploadLink')}."
+            f"Email sent to {remediation.get('recipientEmail')} "
+            f"(Subject: '{remediation.get('emailSubject')}'). Mode: {delivery_mode}."
         ),
         timestamp=datetime.utcnow()
     )
-    db.add(log)
+    db.add(audit_entry)
     db.commit()
     db.refresh(analysis)
 

@@ -11,7 +11,6 @@ The result has the same shape as execute_multi_agent_pipeline, so the copilot UI
 import json
 import logging
 import time
-import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional, TypedDict
 
@@ -251,7 +250,6 @@ def _assemble(run: AgentRun, llm: LLM, t0: float) -> Dict[str, Any]:
     remediation = workflow["remediation"]
     if run.message_to_client:
         client = case_obj.client
-        link = f"https://onboarding.raiffeisen-bank.com/reupload/case-{case_obj.case_number}?token={uuid.uuid4().hex[:10]}"
         requested = ", ".join(d["documentType"] for d in run.requested_documents)
         remediation = {
             "required": True,
@@ -259,16 +257,12 @@ def _assemble(run: AgentRun, llm: LLM, t0: float) -> Dict[str, Any]:
             "automationMode": "ready_for_officer_approval",
             "status": "draft_ready",
             "sentAt": None,
-            "channels": ["Email", "SMS"],
+            "channels": ["Email"],
             "recipientName": client.full_name,
             "recipientEmail": client.email,
             "recipientPhone": client.phone,
-            "secureUploadLink": link,
-            "smsPreview": (f"Raiffeisen Bank: Hello {client.full_name.split()[0]}, regarding case "
-                           f"#{case_obj.case_number} we need {requested or 'a quick clarification'}. "
-                           f"Secure link: {link}"),
-            "emailSubject": f"[Action Required] Case #{case_obj.case_number} — Raiffeisen Bank",
-            "emailBody": f"{run.message_to_client}\n\nSecure upload link:\n👉 {link}",
+            "emailSubject": f"[Action Required] Case #{case_obj.case_number} ({case_obj.title}) — Clarification Request",
+            "emailBody": run.message_to_client,
         }
 
     checklist = list(workflow["checklist"])

@@ -153,10 +153,20 @@ def _citations(run: AgentRun, citations: List[Dict[str, Any]]) -> List[Dict[str,
     for c in citations:
         quote = _line(run, c["doc_code"], c["line"])
         doc = run.documents[c["doc_code"]]
+        raw_val = run.pii.unmask(c.get("value") or "").strip()
+        if not raw_val:
+            clean_quote = re.sub(r"^Line\s+\d+\s*:\s*", "", run.pii.unmask(quote)).strip()
+            if ":" in clean_quote:
+                after_colon = clean_quote.split(":", 1)[1].strip()
+                raw_val = after_colon if after_colon else clean_quote
+            else:
+                raw_val = clean_quote
+            if len(raw_val) > 48:
+                raw_val = raw_val[:45].rstrip() + "..."
         values.append({
             "documentId": doc.id, "docCode": c["doc_code"], "documentName": doc.file_name,
-            "documentType": doc.document_type, "value": run.pii.unmask(c.get("value") or ""),
-            "lineNumber": int(c["line"]), "page": 1, "quote": quote,
+            "documentType": doc.document_type, "value": raw_val, "formattedValue": raw_val,
+            "lineNumber": int(c["line"]), "page": 1, "quote": run.pii.unmask(quote),
         })
     return values
 

@@ -17,6 +17,10 @@ Actualizat: 2026-10-28. Starea documentată reflectă implementarea existentă �
   2. `unusual_transactions` — Analiza extrasului de cont pe 3 luni și a structurii cheltuielilor, cu izolarea cheltuielilor `suspected` (ex. `sports_betting`) și a notelor de evidență (`evidence_note`) pentru verificarea umană.
   3. `doc_reconciliation` — Matrice de reconciliere în 3 direcții (Documente extrase cu citări pe linie vs. Sistem/ANAF vs. Profil Financiar).
   4. `clientSummary360` — Rezumat Executiv 360° complet despre client la finalul analizei (AWS Bedrock Amazon Nova Pro + motor determinist).
+  5. **Referințe și acțiuni complete în AI Copilot (`AICopilotDrawer.jsx`, `CaseDetail.jsx`, `ai_copilot.py`, `orchestrator.py`, `modular_agents.py`)**:
+     - Toate citările pe documente (din pilonul 2 `salaryInflows`, matricea în 3 direcții din pilonul 3 `reconciliationMatrix`, `findings` și tab-ul `GDPR & OCR`) deschid și evidențiază linia exactă în preview-ul inline și în viewer-ul de documente al dosarului.
+     - Butoanele `Validate & Apply` și `Mark as Verified by Officer` actualizează sincronizat atât `findings`, cât și `modularResults`, recalculând DTI-ul în Python și matricea de reconciliere.
+     - Tab-ul `Customer Outreach` folosește un composer interactiv de **Clarification Email** (destinatar, subiect și corp editabile, trimitere/logare în Audit Trail + SMTP opțional și deschidere în aplicația de e-mail prin `mailto:`), eliminând elementele mockuite nefolosite (SMS fals, link fictiv de upload).
 
 ## Date demo
 
@@ -24,8 +28,8 @@ La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit
 
 ## Verificări efectuate
 
-- Cele 4 teste din `backend/tests/test_financial_profiles.py` au trecut: persistență și înlocuire, validare, idempotenta seed-ului și consistența profilurilor generate.
-- `npm run build` a trecut după adăugarea UI-ului și a noii arhitecturi în 3 piloni + Rezumat 360°.
+- Cele 10 teste din `backend/tests/` (`test_financial_profiles.py` și `test_agentic.py`) au trecut.
+- `npm run build` a trecut după actualizarea UI-ului AI Copilot și rezolvarea tuturor referințelor de la butoane.
 - Endpoint-urile `/api/cases/{id}/analysis` și `/api/cases/{id}/agents/{agent_id}/run` au fost verificate live cu AWS Bedrock (`Amazon Nova Pro`).
 - Toate profilurile locale au trecut validarea `FinancialProfileOut`; nu existau clienți fără profil.
 - `git diff --check` a trecut după implementare.

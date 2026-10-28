@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bot,
   Sparkles,
@@ -15,9 +16,7 @@ import {
   Check,
   FileText,
   Mail,
-  MessageSquare,
   UserCheck,
-  Zap,
   Maximize2,
   Columns,
   ChevronDown,
@@ -26,12 +25,7 @@ import {
   Layers,
   Cpu,
   User,
-  Briefcase,
-  Building2,
-  CreditCard,
-  TrendingUp,
-  FileSpreadsheet,
-  ScanSearch
+  TrendingUp
 } from 'lucide-react';
 import {
   fetchCaseAgents,
@@ -126,6 +120,9 @@ export default function AICopilotDrawer({
   onAnalysisUpdated,
   onSelectCitation
 }) {
+  const navigate = useNavigate();
+  const inlinePreviewRef = useRef(null);
+
   const [analysis, setAnalysis] = useState(initialAnalysis || null);
   const [agentCatalog, setAgentCatalog] = useState(DEFAULT_AGENT_CATALOG);
   const [runningAll, setRunningAll] = useState(false);
@@ -138,8 +135,27 @@ export default function AICopilotDrawer({
   const [toastMsg, setToastMsg] = useState(null);
   const [inlinePreviewDoc, setInlinePreviewDoc] = useState(null);
 
+  // Interactive Email Clarification composer state
+  const [emailRecipient, setEmailRecipient] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+
+  const syncEmailDraft = (analysisObj, currentCase) => {
+    const rem = analysisObj?.remediation || {};
+    setEmailRecipient(rem.recipientEmail || currentCase?.client?.email || '');
+    setEmailSubject(
+      rem.emailSubject ||
+        `[Action Required] Case #${currentCase?.case_number || ''} (${currentCase?.title || 'Loan Application'}) — Clarification Request`
+    );
+    setEmailBody(
+      rem.emailBody ||
+        `Dear ${currentCase?.client?.full_name || 'Applicant'},\n\nRegarding your application #${currentCase?.case_number || ''}, please provide the requested supporting clarification at your earliest convenience.\n\nBest regards,\nRaiffeisen Bank Credit Underwriting Desk`
+    );
+  };
+
   useEffect(() => {
     setAnalysis(initialAnalysis || null);
+    syncEmailDraft(initialAnalysis, caseData);
     if (initialAnalysis?.metrics?.modularResults) {
       const autoExpand = {};
       Object.keys(initialAnalysis.metrics.modularResults).forEach((k) => {
@@ -165,6 +181,15 @@ export default function AICopilotDrawer({
     setTimeout(() => setToastMsg(null), 4000);
   };
 
+  const scrollToPillarCard = (agentId) => {
+    setTimeout(() => {
+      const el = document.getElementById(`pillar-card-${agentId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 90);
+  };
+
   // Run a single modular AI agent independently without conflicting with other agents
   const handleRunSingleAgent = async (agentId) => {
     if (!caseData || runningAgentId || runningAll) return;
@@ -173,10 +198,12 @@ export default function AICopilotDrawer({
       setActiveTab('modular_hub');
       const updatedAnalysis = await runModularAgent(caseData.id, agentId);
       setAnalysis(updatedAnalysis);
+      syncEmailDraft(updatedAnalysis, caseData);
       setExpandedModules((prev) => ({ ...prev, [agentId]: true }));
       if (onAnalysisUpdated) onAnalysisUpdated(updatedAnalysis);
       const agentMeta = agentCatalog.find((a) => a.agentId === agentId);
-      showToast(`${agentMeta?.shortLabel || agentId} completed via AWS Bedrock!`);
+      showToast(`${agentMeta?.shortLabel || agentId} completed!`);
+      scrollToPillarCard(agentId);
     } catch (err) {
       console.error(err);
       showToast(`Error running agent module: ${agentId}`);
@@ -191,8 +218,23 @@ export default function AICopilotDrawer({
     if (!modularResults[agentId]) {
       handleRunSingleAgent(agentId);
     } else {
+      const nextExpanded = !expandedModules[agentId];
       setActiveTab('modular_hub');
-      setExpandedModules((prev) => ({ ...prev, [agentId]: !prev[agentId] }));
+      setExpandedModules((prev) => ({ ...prev, [agentId]: nextExpanded }));
+      if (nextExpanded) {
+        scrollToPillarCard(agentId);
+      }
+    }
+  };
+
+  const handleInspectPillar = (agentId) => {
+    const modularResults = analysis?.metrics?.modularResults || {};
+    if (!modularResults[agentId]) {
+      handleRunSingleAgent(agentId);
+    } else {
+      setActiveTab('modular_hub');
+      setExpandedModules((prev) => ({ ...prev, [agentId]: true }));
+      scrollToPillarCard(agentId);
     }
   };
 
@@ -203,6 +245,7 @@ export default function AICopilotDrawer({
       setRunningAll(true);
       const res = await runCaseAnalysis(caseData.id, {});
       setAnalysis(res);
+      syncEmailDraft(res, caseData);
       if (res?.metrics?.modularResults) {
         const allOpen = {};
         Object.keys(res.metrics.modularResults).forEach((k) => {
@@ -232,11 +275,12 @@ export default function AICopilotDrawer({
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
       showToast(
         resolvedValue !== null
-          ? `Value "${resolvedValue}" applied to case and DTI recalculated in Python!`
-          : 'Finding updated in audit trail!'
+          ? `Value "${resolvedValue}" applied to case and DTI / reconciliation updated!`
+          : 'Finding verified by officer and logged in audit trail!'
       );
     } catch (err) {
       console.error(err);
+      showToast('Could not update finding resolution.');
     } finally {
       setActionLoading(false);
     }
@@ -247,16 +291,29 @@ export default function AICopilotDrawer({
     try {
       setActionLoading(true);
       const updated = await sendRemediationNotification(analysis.analysisId, {
-        channel: 'email_and_sms',
+        channel: 'email',
+        recipient_email: emailRecipient || analysis.remediation?.recipientEmail,
+        email_subject: emailSubject || analysis.remediation?.emailSubject,
+        custom_message: emailBody || analysis.remediation?.emailBody,
       });
       setAnalysis(updated);
+      syncEmailDraft(updated, caseData);
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
-      showToast('SMS and Email with secure re-upload link dispatched to customer!');
+      showToast(`Clarification email dispatched to ${emailRecipient || updated.remediation?.recipientEmail} and logged in Audit Trail!`);
     } catch (err) {
       console.error(err);
+      showToast('Failed to dispatch clarification email.');
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleOpenMailClient = () => {
+    const to = emailRecipient || analysis?.remediation?.recipientEmail || caseData?.client?.email || '';
+    const subj = emailSubject || analysis?.remediation?.emailSubject || '';
+    const body = emailBody || analysis?.remediation?.emailBody || '';
+    const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleFinalDecision = async (decision) => {
@@ -278,28 +335,56 @@ export default function AICopilotDrawer({
       showToast(labels[decision] || 'Decision recorded!');
     } catch (err) {
       console.error(err);
+      showToast('Error submitting officer decision.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleCitationClick = (documentId, lineNumber, quote) => {
-    if (onSelectCitation) {
-      onSelectCitation(documentId, lineNumber, quote);
+  const handleCitationClick = (documentId, lineNumber, quote = null, docCode = null, documentName = null) => {
+    const docs = caseData?.documents || [];
+    const foundDoc =
+      docs.find((d) => d.id === documentId) ||
+      (docCode && docs.find((d) => d.doc_code === docCode || `doc-${d.id}` === docCode)) ||
+      (documentName && docs.find((d) => d.file_name === documentName)) ||
+      (quote && docs.find((d) => (d.content_text || '').includes(quote))) ||
+      docs[0];
+
+    let resolvedLine = Number(lineNumber) || 1;
+    if (foundDoc?.content_text && quote) {
+      const lines = foundDoc.content_text.split('\n');
+      if (!lines[resolvedLine - 1] || !lines[resolvedLine - 1].includes(quote.slice(0, 20))) {
+        const matchIdx = lines.findIndex((l) => l.includes(quote) || quote.includes(l.trim()));
+        if (matchIdx >= 0) {
+          resolvedLine = matchIdx + 1;
+        }
+      }
     }
-    const foundDoc = caseData?.documents?.find((d) => d.id === documentId);
+
+    if (onSelectCitation) {
+      onSelectCitation(foundDoc?.id ?? documentId, resolvedLine, quote, docCode, documentName);
+    }
     if (foundDoc) {
       setInlinePreviewDoc({
         doc: foundDoc,
-        lineNumber,
+        lineNumber: resolvedLine,
       });
+      setTimeout(() => {
+        inlinePreviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const lineEl = document.getElementById(`inline-preview-line-${resolvedLine}`);
+        if (lineEl) {
+          lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 80);
     }
   };
 
   if (!isOpen) return null;
 
-  const redFlags = analysis?.findings?.filter((f) => f.flagType === 'red_flag') || [];
-  const greenFlags = analysis?.findings?.filter((f) => f.flagType === 'green_flag') || [];
+  const redFlags =
+    analysis?.findings?.filter(
+      (f) => f.flagType === 'red_flag' && f.status !== 'resolved_by_officer' && f.status !== 'confirmed_by_officer'
+    ) || [];
   const modularResults = analysis?.metrics?.modularResults || {};
   const clientSummary360 = analysis?.metrics?.clientSummary360 || null;
   const executedModulesCount = agentCatalog.filter((a) => Boolean(modularResults[a.agentId])).length;
@@ -524,10 +609,7 @@ export default function AICopilotDrawer({
                       <p className="text-xs text-slate-300 mt-1">{p.summary}</p>
                     </div>
                     <button
-                      onClick={() => {
-                        setActiveTab('modular_hub');
-                        setExpandedModules((prev) => ({ ...prev, [p.agentId]: true }));
-                      }}
+                      onClick={() => handleInspectPillar(p.agentId)}
                       className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 shrink-0 underline cursor-pointer self-start sm:self-center"
                     >
                       Inspect Pillar →
@@ -539,13 +621,13 @@ export default function AICopilotDrawer({
           </div>
         )}
 
-        {/* Section 4: Integrated Smart Remediation Action (if discrepancies exist) */}
+        {/* Section 4: Integrated Smart Email Remediation Action (if discrepancies exist) */}
         {rem?.required && (
           <div className="p-4 rounded-xl bg-[#070f20] border border-amber-400/40 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider">
-                <Send className="w-4 h-4" />
-                <span>Recommended Remediation Outreach ({rem.recipientEmail} • {rem.recipientPhone})</span>
+                <Mail className="w-4 h-4" />
+                <span>Recommended Clarification Email ({emailRecipient || rem.recipientEmail})</span>
               </div>
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-400/15 text-amber-300">
                 {rem.status === 'sent_by_officer' ? `SENT (${rem.sentAt})` : 'READY FOR DISPATCH'}
@@ -557,21 +639,28 @@ export default function AICopilotDrawer({
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 onClick={handleSendRemediation}
-                disabled={actionLoading || rem.status === 'sent_by_officer'}
+                disabled={actionLoading}
                 className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>
                   {rem.status === 'sent_by_officer'
-                    ? 'Clarification Link Already Sent'
-                    : 'Send Email & SMS Clarification Link'}
+                    ? 'Resend & Log Clarification Email'
+                    : 'Send & Log Clarification Email'}
                 </span>
+              </button>
+              <button
+                onClick={handleOpenMailClient}
+                className="px-3 py-2 rounded-xl bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-xs font-semibold text-blue-200 flex items-center gap-1.5 cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open in Email App</span>
               </button>
               <button
                 onClick={() => setActiveTab('remediation')}
                 className="px-3 py-2 rounded-xl bg-[#0c1730] hover:bg-[#132448] border border-[#223867] text-xs font-semibold text-slate-200 cursor-pointer"
               >
-                Preview Full Email & SMS Draft
+                Edit Email Draft →
               </button>
             </div>
           </div>
@@ -780,22 +869,44 @@ export default function AICopilotDrawer({
 
       {/* INLINE DOCUMENT CITATION PREVIEW */}
       {inlinePreviewDoc && (
-        <div className="mx-4 sm:mx-6 mt-4 p-4 rounded-2xl bg-[#050914] border-2 border-amber-400/60 shadow-xl space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
+        <div
+          ref={inlinePreviewRef}
+          className="mx-4 sm:mx-6 mt-4 p-4 rounded-2xl bg-[#050914] border-2 border-amber-400/60 shadow-xl space-y-2.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300 flex-wrap">
               <FileText className="w-4 h-4 shrink-0" />
               <span>Source Excerpt: {inlinePreviewDoc.doc.file_name}</span>
               <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-mono text-xs">
                 Line {inlinePreviewDoc.lineNumber}
               </span>
             </div>
-            <button
-              onClick={() => setInlinePreviewDoc(null)}
-              className="text-slate-400 hover:text-white p-1 cursor-pointer"
-              title="Close inline preview"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onSelectCitation && (
+                <button
+                  onClick={() =>
+                    onSelectCitation(
+                      inlinePreviewDoc.doc.id,
+                      inlinePreviewDoc.lineNumber,
+                      null,
+                      inlinePreviewDoc.doc.doc_code,
+                      inlinePreviewDoc.doc.file_name
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-[#0d1830] hover:bg-[#16284c] border border-amber-400/40 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Highlight in Case Document Viewer</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+              <button
+                onClick={() => setInlinePreviewDoc(null)}
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                title="Close inline preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div className="rounded-xl bg-[#080f1e] border border-[#192948] p-3 font-mono text-xs space-y-1 max-h-48 overflow-y-auto">
             {(inlinePreviewDoc.doc.content_text || '').split('\n').map((line, i) => {
@@ -804,6 +915,7 @@ export default function AICopilotDrawer({
               return (
                 <div
                   key={i}
+                  id={`inline-preview-line-${lNum}`}
                   className={`px-2.5 py-1 rounded ${
                     isTarget
                       ? 'bg-amber-400/25 border-l-4 border-amber-400 text-white font-bold'
@@ -955,6 +1067,7 @@ export default function AICopilotDrawer({
                       return (
                         <div
                           key={agent.agentId}
+                          id={`pillar-card-${agent.agentId}`}
                           className={`rounded-2xl border transition-all overflow-hidden ${
                             isAlert
                               ? 'bg-[#140d18]/90 border-amber-500/45'
@@ -1053,10 +1166,20 @@ export default function AICopilotDrawer({
                               {mod.structuredData && (
                                 <div className="space-y-3">
                                   {mod.structuredData.contradictionsAndMissing?.length > 0 && (
-                                    <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 space-y-2">
-                                      <span className="text-xs font-bold uppercase tracking-wider text-amber-300 block">
-                                        Contradictory or Missing Financial Data Flagged:
-                                      </span>
+                                    <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 space-y-2.5">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300 block">
+                                          Contradictory or Missing Financial Data Flagged:
+                                        </span>
+                                        {caseData?.client?.id && (
+                                          <button
+                                            onClick={() => navigate(`/clients/${caseData.client.id}/finances`)}
+                                            className="px-2.5 py-1 rounded-lg bg-[#0a1428] hover:bg-[#132448] border border-amber-400/40 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <span>Open Financial Profile →</span>
+                                          </button>
+                                        )}
+                                      </div>
                                       {mod.structuredData.contradictionsAndMissing.map((c, idx) => (
                                         <div key={idx} className="text-xs text-slate-200 flex items-start gap-2">
                                           <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -1108,9 +1231,19 @@ export default function AICopilotDrawer({
                                         <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
                                           Isolated Unverified ("Suspected") Signals — For Officer Verification:
                                         </span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-semibold">
-                                          Excluded from baseline living total
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-200 font-semibold">
+                                            Excluded from baseline living total
+                                          </span>
+                                          {caseData?.client?.id && (
+                                            <button
+                                              onClick={() => navigate(`/clients/${caseData.client.id}/finances`)}
+                                              className="px-2.5 py-1 rounded-lg bg-[#0a1428] hover:bg-[#132448] border border-amber-400/40 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <span>Verify in Financial Profile →</span>
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
                                       {mod.transactionBreakdown.suspectedSignals.map((sig, i) => (
                                         <div
@@ -1151,7 +1284,13 @@ export default function AICopilotDrawer({
                                           <button
                                             key={idx}
                                             onClick={() =>
-                                              handleCitationClick(inf.documentId, inf.lineNumber, inf.quote)
+                                              handleCitationClick(
+                                                inf.documentId,
+                                                inf.lineNumber,
+                                                inf.quote,
+                                                inf.docCode,
+                                                inf.documentName
+                                              )
                                             }
                                             className="p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#182744] hover:border-amber-400 text-left text-xs cursor-pointer transition-colors"
                                           >
@@ -1191,22 +1330,47 @@ export default function AICopilotDrawer({
                                         const isMismatch = row.status === 'mismatch';
                                         return (
                                           <tr key={rIdx} className={isMismatch ? 'bg-red-950/20' : ''}>
-                                            <td className="py-2 pr-2 font-semibold text-white">
+                                            <td className="py-2 pr-2 font-semibold text-white align-top">
                                               {row.dimension}
                                               <span className="block text-[10px] font-mono text-slate-400">
                                                 {row.ruleRef}
                                               </span>
                                             </td>
-                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
-                                              {row.documentsValue}
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px] align-top">
+                                              <div>{row.documentsValue}</div>
+                                              {row.citations?.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                  {row.citations.map((cit, cIdx) => (
+                                                    <button
+                                                      key={cIdx}
+                                                      onClick={() =>
+                                                        handleCitationClick(
+                                                          cit.documentId,
+                                                          cit.lineNumber,
+                                                          cit.quote,
+                                                          cit.docCode,
+                                                          cit.documentName
+                                                        )
+                                                      }
+                                                      className="px-1.5 py-0.5 rounded bg-[#0c1830] hover:bg-[#172d58] border border-amber-400/30 hover:border-amber-400 text-[10px] text-amber-300 flex items-center gap-1 cursor-pointer"
+                                                      title={`Inspect ${cit.documentName || cit.docCode} Line ${cit.lineNumber}`}
+                                                    >
+                                                      <span>
+                                                        {cit.docCode || 'Doc'} L{cit.lineNumber}
+                                                      </span>
+                                                      <ExternalLink className="w-2.5 h-2.5" />
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              )}
                                             </td>
-                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px] align-top">
                                               {row.systemRecordValue}
                                             </td>
-                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px]">
+                                            <td className="py-2 px-2 text-slate-200 font-mono text-[11px] align-top">
                                               {row.financialProfileValue}
                                             </td>
-                                            <td className="py-2 pl-2 text-right">
+                                            <td className="py-2 pl-2 text-right align-top">
                                               <span
                                                 className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                                   isMismatch
@@ -1250,9 +1414,18 @@ export default function AICopilotDrawer({
                                           <span className="text-xs sm:text-sm font-bold text-white">
                                             {f.title}
                                           </span>
-                                          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300">
-                                            {f.ruleRef}
-                                          </span>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {f.ruleRef && (
+                                              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300">
+                                                {f.ruleRef}
+                                              </span>
+                                            )}
+                                            {isResolved && (
+                                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                                ✓ Reviewed by Officer {f.resolvedValue ? `(${f.resolvedValue})` : ''}
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                         <p className="text-xs text-slate-300">{f.description}</p>
 
@@ -1262,7 +1435,13 @@ export default function AICopilotDrawer({
                                               <button
                                                 key={i}
                                                 onClick={() =>
-                                                  handleCitationClick(v.documentId, v.lineNumber, v.quote)
+                                                  handleCitationClick(
+                                                    v.documentId,
+                                                    v.lineNumber,
+                                                    v.quote,
+                                                    v.docCode,
+                                                    v.documentName
+                                                  )
                                                 }
                                                 className="w-full text-left p-2.5 rounded-lg bg-[#050914] hover:bg-[#0e1b36] border border-[#1a2b4c] hover:border-amber-400 flex items-center justify-between gap-2 text-xs cursor-pointer"
                                               >
@@ -1273,7 +1452,7 @@ export default function AICopilotDrawer({
                                                   <span className="font-mono text-slate-300">"{v.quote}"</span>
                                                 </div>
                                                 <span className="text-amber-400 shrink-0 font-semibold flex items-center gap-1">
-                                                  {v.formattedValue || v.value}{' '}
+                                                  {v.formattedValue || v.value || `Line ${v.lineNumber}`}{' '}
                                                   <ExternalLink className="w-3 h-3" />
                                                 </span>
                                               </button>
@@ -1281,26 +1460,51 @@ export default function AICopilotDrawer({
                                           </div>
                                         )}
 
-                                        {isRed && f.selectableValues && f.selectableValues.length > 0 && (
-                                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                                            {f.selectableValues.map((val, idx) => (
-                                              <button
-                                                key={idx}
-                                                disabled={actionLoading}
-                                                onClick={() =>
-                                                  handleResolveFinding(f.id, 'override_value', val)
-                                                }
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 cursor-pointer"
-                                              >
-                                                <Check className="w-3.5 h-3.5" />
-                                                <span>
-                                                  Validate & Apply:{' '}
-                                                  {typeof val === 'number'
-                                                    ? `€${val.toLocaleString('en-US')}`
-                                                    : val}
-                                                </span>
-                                              </button>
-                                            ))}
+                                        {isRed && (
+                                          <div className="pt-2 border-t border-white/10 space-y-2">
+                                            {f.suggestedAction && (
+                                              <div className="text-xs text-amber-300 font-medium">
+                                                💡 Recommendation: {f.suggestedAction}
+                                              </div>
+                                            )}
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              {f.selectableValues && f.selectableValues.length > 0 ? (
+                                                f.selectableValues.map((val, idx) => (
+                                                  <button
+                                                    key={idx}
+                                                    disabled={actionLoading}
+                                                    onClick={() =>
+                                                      handleResolveFinding(f.id, 'override_value', val)
+                                                    }
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                                                      String(f.resolvedValue) === String(val)
+                                                        ? 'bg-emerald-500 text-slate-950 font-bold'
+                                                        : 'bg-blue-600 hover:bg-blue-500 text-white'
+                                                    }`}
+                                                  >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                    <span>
+                                                      Validate & Apply:{' '}
+                                                      {typeof val === 'number'
+                                                        ? `€${val.toLocaleString('en-US')}`
+                                                        : val}
+                                                    </span>
+                                                  </button>
+                                                ))
+                                              ) : (
+                                                <button
+                                                  disabled={actionLoading}
+                                                  onClick={() => handleResolveFinding(f.id, 'confirm')}
+                                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
+                                                    isResolved
+                                                      ? 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-200'
+                                                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                                                  }`}
+                                                >
+                                                  {isResolved ? '✓ Verified by Officer' : 'Mark as Verified by Officer'}
+                                                </button>
+                                              )}
+                                            </div>
                                           </div>
                                         )}
                                       </div>
@@ -1350,9 +1554,11 @@ export default function AICopilotDrawer({
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-slate-900 text-slate-200 border border-slate-700">
-                              {f.ruleRef}
-                            </span>
+                            {f.ruleRef && (
+                              <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-slate-900 text-slate-200 border border-slate-700">
+                                {f.ruleRef}
+                              </span>
+                            )}
                             {isResolved && (
                               <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
                                 ✓ Reviewed by Officer {f.resolvedValue ? `(${f.resolvedValue})` : ''}
@@ -1378,7 +1584,15 @@ export default function AICopilotDrawer({
                             {f.values.map((v, i) => (
                               <button
                                 key={i}
-                                onClick={() => handleCitationClick(v.documentId, v.lineNumber, v.quote)}
+                                onClick={() =>
+                                  handleCitationClick(
+                                    v.documentId,
+                                    v.lineNumber,
+                                    v.quote,
+                                    v.docCode,
+                                    v.documentName
+                                  )
+                                }
                                 className="w-full text-left p-3 rounded-xl bg-[#060b16] hover:bg-[#0e1b36] border border-[#1a2b4c] hover:border-amber-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 group cursor-pointer"
                               >
                                 <div className="min-w-0 flex-1">
@@ -1395,7 +1609,7 @@ export default function AICopilotDrawer({
                                 </div>
                                 <div className="sm:text-right shrink-0 flex sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 border-slate-800 pt-2 sm:pt-0">
                                   <span className="text-sm font-bold text-white block">
-                                    {v.formattedValue || v.value}
+                                    {v.formattedValue || v.value || `Line ${v.lineNumber}`}
                                   </span>
                                   <span className="text-xs text-amber-400 flex items-center gap-1 mt-0.5">
                                     Inspect line <ExternalLink className="w-3 h-3" />
@@ -1409,9 +1623,11 @@ export default function AICopilotDrawer({
 
                       {isRed && (
                         <div className="pt-3 border-t border-white/10 space-y-2.5">
-                          <div className="text-xs sm:text-sm text-amber-300 font-medium">
-                            💡 Recommendation: {f.suggestedAction}
-                          </div>
+                          {f.suggestedAction && (
+                            <div className="text-xs sm:text-sm text-amber-300 font-medium">
+                              💡 Recommendation: {f.suggestedAction}
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-center gap-2.5">
                             {f.selectableValues && f.selectableValues.length > 0 ? (
                               f.selectableValues.map((val, idx) => (
@@ -1436,9 +1652,13 @@ export default function AICopilotDrawer({
                               <button
                                 disabled={actionLoading}
                                 onClick={() => handleResolveFinding(f.id, 'confirm')}
-                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer"
+                                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold cursor-pointer ${
+                                  isResolved
+                                    ? 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-200'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                                }`}
                               >
-                                Mark as Verified by Officer
+                                {isResolved ? '✓ Verified by Officer' : 'Mark as Verified by Officer'}
                               </button>
                             )}
                           </div>
@@ -1469,7 +1689,11 @@ export default function AICopilotDrawer({
                       <div className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">
                         {analysis.feasibilityMath.dti_percentage}%
                         <span className="text-sm font-normal text-slate-400 ml-2">
-                          (Max Ceiling: {analysis.feasibilityMath.max_allowed_dti_percentage}%)
+                          (Max Ceiling:{' '}
+                          {analysis.feasibilityMath.max_dti_limit_percent ??
+                            analysis.feasibilityMath.max_allowed_dti_percentage ??
+                            40}
+                          %)
                         </span>
                       </div>
                     </div>
@@ -1528,10 +1752,47 @@ export default function AICopilotDrawer({
                         €{analysis.feasibilityMath.monthly_income_used?.toLocaleString('en-US')}
                       </span>
                       <span className="text-xs text-slate-500 block mt-0.5">
-                        Total Debt Service: €{analysis.feasibilityMath.total_monthly_debt_service}/mo
+                        Total Debt Service: €
+                        {analysis.feasibilityMath.total_monthly_obligation ??
+                          analysis.feasibilityMath.total_monthly_debt_service}
+                        /mo
                       </span>
                     </div>
                   </div>
+
+                  {analysis.feasibilityMath.alternative_income_scenario && (
+                    <div className="p-3.5 rounded-xl bg-[#071124] border border-blue-500/35 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="text-blue-300 font-bold block">
+                          Alternative Documented Income Scenario: €
+                          {Number(analysis.feasibilityMath.alternative_income_scenario.income).toLocaleString('en-US')}/mo
+                        </span>
+                        <span className="text-slate-300">
+                          Resulting DTI: <strong>{analysis.feasibilityMath.alternative_income_scenario.dti_percentage}%</strong> (
+                          {analysis.feasibilityMath.alternative_income_scenario.is_feasible ? 'Eligible ≤ 40%' : 'Exceeds 40%'})
+                        </span>
+                      </div>
+                      {analysis.findings?.some((f) => f.id === 'finding-income-mismatch') && (
+                        <button
+                          disabled={actionLoading}
+                          onClick={() =>
+                            handleResolveFinding(
+                              'finding-income-mismatch',
+                              'override_value',
+                              analysis.feasibilityMath.alternative_income_scenario.income
+                            )
+                          }
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>
+                            Apply €
+                            {Number(analysis.feasibilityMath.alternative_income_scenario.income).toLocaleString('en-US')} Income
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   <div className="p-3 rounded-xl bg-[#050811] border border-slate-800 font-mono text-xs text-slate-300">
                     Formula: {analysis.feasibilityMath.formula_used}
@@ -1540,19 +1801,19 @@ export default function AICopilotDrawer({
               </div>
             )}
 
-            {/* TAB 3: REMEDIATION & CUSTOMER OUTREACH */}
+            {/* TAB 3: REMEDIATION & CUSTOMER EMAIL OUTREACH */}
             {activeTab === 'remediation' && analysis?.remediation && (
               <div className="space-y-4">
                 <div className="p-4 sm:p-5 rounded-2xl bg-[#0b1326] border border-[#1e3158] space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className="text-xs uppercase font-bold tracking-wider text-amber-400">
-                        Automated Customer Remediation Bridge
+                        Customer Email Clarification Composer
                       </span>
                       <h4 className="text-base font-bold text-white mt-0.5">
                         {analysis.remediation.required
                           ? `Trigger: ${analysis.remediation.triggerReason}`
-                          : 'No Remediation Needed — All Documents Valid'}
+                          : 'Optional Customer Notification — Dossier Currently Validated'}
                       </h4>
                     </div>
                     <span
@@ -1561,56 +1822,112 @@ export default function AICopilotDrawer({
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : analysis.remediation.required
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-slate-800 text-slate-400'
+                          : 'bg-slate-800 text-slate-300'
                       }`}
                     >
                       {analysis.remediation.status === 'sent_by_officer'
                         ? `Dispatched (${analysis.remediation.sentAt})`
-                        : analysis.remediation.status}
+                        : analysis.remediation.required
+                        ? 'Draft Ready'
+                        : 'No Action Required'}
                     </span>
                   </div>
 
-                  {analysis.remediation.required && (
-                    <>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-blue-300">
-                          <MessageSquare className="w-4 h-4" />
-                          <span>SMS Preview ({analysis.remediation.recipientPhone}):</span>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-[#060b16] border border-[#182744] text-xs sm:text-sm text-slate-200 font-mono">
-                          {analysis.remediation.smsPreview}
-                        </div>
-                      </div>
+                  {analysis.remediation.deliveryMode && (
+                    <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>
+                        <strong>Last Dispatch Status:</strong> {analysis.remediation.deliveryMode} at{' '}
+                        {analysis.remediation.sentAt}
+                      </span>
+                    </div>
+                  )}
 
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-amber-300">
-                          <Mail className="w-4 h-4" />
-                          <span>Email Preview ({analysis.remediation.recipientEmail}):</span>
-                        </div>
-                        <div className="p-4 rounded-xl bg-[#060b16] border border-[#182744] space-y-2 text-xs sm:text-sm">
-                          <div className="font-bold text-white border-b border-slate-800 pb-2">
-                            Subject: {analysis.remediation.emailSubject}
-                          </div>
-                          <pre className="text-slate-200 font-sans whitespace-pre-wrap leading-relaxed">
-                            {analysis.remediation.emailBody}
-                          </pre>
-                        </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 block mb-1">
+                          Recipient Email (To)
+                        </label>
+                        <input
+                          type="email"
+                          value={emailRecipient}
+                          onChange={(e) => setEmailRecipient(e.target.value)}
+                          placeholder="applicant@email.com"
+                          className="w-full bg-[#060b16] border border-[#182744] rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400"
+                        />
                       </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 block mb-1">
+                          Applicant Contact Phone (Reference)
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={analysis.remediation.recipientPhone || caseData?.client?.phone || 'N/A'}
+                          className="w-full bg-[#050811] border border-[#142038] rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-400 font-mono"
+                        />
+                      </div>
+                    </div>
 
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        Email Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                        className="w-full bg-[#060b16] border border-[#182744] rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-semibold focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Email Message Body (Editable before sending)</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => syncEmailDraft(analysis, caseData)}
+                          className="text-[11px] text-slate-400 hover:text-amber-300 underline cursor-pointer"
+                        >
+                          Reset to AI Draft
+                        </button>
+                      </div>
+                      <textarea
+                        rows={9}
+                        value={emailBody}
+                        onChange={(e) => setEmailBody(e.target.value)}
+                        className="w-full bg-[#060b16] border border-[#182744] rounded-xl p-3.5 text-xs sm:text-sm text-slate-100 font-sans leading-relaxed focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
                       <button
-                        disabled={actionLoading || analysis.remediation.status === 'sent_by_officer'}
+                        disabled={actionLoading || !emailRecipient.trim()}
                         onClick={handleSendRemediation}
-                        className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                        className="flex-1 py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                       >
                         <Send className="w-4 h-4" />
                         <span>
                           {analysis.remediation.status === 'sent_by_officer'
-                            ? 'Clarification Request Already Sent to Customer'
-                            : 'Approve & Dispatch SMS + Email with Secure Re-Upload Link'}
+                            ? 'Resend & Log Clarification Email'
+                            : 'Send & Log Clarification Email'}
                         </span>
                       </button>
-                    </>
-                  )}
+
+                      <button
+                        type="button"
+                        onClick={handleOpenMailClient}
+                        className="py-3 px-4 rounded-xl bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>Open in Default Email App (mailto:)</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1618,6 +1935,7 @@ export default function AICopilotDrawer({
             {/* TAB 4: GDPR PII SHIELD & EXTRACTED OCR */}
             {activeTab === 'pii_data' && (
               <div className="space-y-5">
+                {/* 1. Local PII Anonymization Shield */}
                 <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm sm:text-base">
@@ -1646,6 +1964,86 @@ export default function AICopilotDrawer({
                     ))}
                   </div>
                 </div>
+
+                {/* 2. Structured OCR Extracted Fields with Citations */}
+                {analysis?.extractedFields?.length > 0 && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-[#0b1326] border border-[#1e3158] space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-blue-300 font-bold text-sm sm:text-base">
+                        <FileText className="w-4 h-4" />
+                        <span>Structured OCR Extracted Fields ({analysis.extractedFields.length})</span>
+                      </div>
+                      <span className="text-xs text-slate-400">
+                        Click any extracted field to highlight its source line
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {analysis.extractedFields.map((ef, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() =>
+                            handleCitationClick(
+                              ef.documentId,
+                              ef.lineNumber,
+                              ef.quote,
+                              ef.docCode,
+                              ef.documentName
+                            )
+                          }
+                          className="p-3 rounded-xl bg-[#060b16] hover:bg-[#0e1b36] border border-[#162442] hover:border-amber-400 text-left text-xs transition-all cursor-pointer space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-400 font-medium">{ef.fieldLabel || ef.field}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-mono text-[10px]">
+                              {ef.docCode} • L{ef.lineNumber}
+                            </span>
+                          </div>
+                          <div className="font-bold text-white text-sm truncate">
+                            {ef.formattedValue || String(ef.value)}
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-400 truncate">
+                            "{ef.quote}"
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Underwriting Workflow Checklist & Policy Rules */}
+                {analysis?.workflowChecklist?.length > 0 && (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-[#0b1326] border border-[#1e3158] space-y-3">
+                    <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-300">
+                      Underwriting Officer Workflow Checklist:
+                    </h4>
+                    <div className="space-y-2">
+                      {analysis.workflowChecklist.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-xl bg-[#060b16] border border-[#162442] flex items-start justify-between gap-3 text-xs"
+                        >
+                          <div>
+                            <span className="font-bold text-white block">
+                              Step {item.step}: {item.title}
+                            </span>
+                            <span className="text-slate-400 block mt-0.5">{item.detail}</span>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 ${
+                              item.status === 'passed'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : item.status === 'failed'
+                                ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1687,10 +2085,25 @@ export default function AICopilotDrawer({
           {/* Final Human-in-the-Loop Decision Bar */}
           <div className="p-4 sm:p-5 bg-[#0a1326] border-t border-[#1e3158] space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-amber-400" />
-                Final Credit Officer Decision (Human-in-the-Loop):
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-amber-400" />
+                  Final Credit Officer Decision (Human-in-the-Loop):
+                </span>
+                {analysis?.humanDecision && analysis.humanDecision !== 'pending' && (
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
+                      analysis.humanDecision === 'approve'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : analysis.humanDecision === 'reject'
+                        ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    }`}
+                  >
+                    Recorded: {analysis.humanDecision.replace('_', ' ')}
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-slate-400">
                 AI prepares 3-pillar audit & 360° summary • Human takes lending decision
               </span>
@@ -1708,7 +2121,9 @@ export default function AICopilotDrawer({
               <button
                 disabled={actionLoading}
                 onClick={() => handleFinalDecision('approve')}
-                className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                className={`py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer ${
+                  analysis?.humanDecision === 'approve' ? 'ring-2 ring-white' : ''
+                }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Approve Case</span>
@@ -1717,7 +2132,9 @@ export default function AICopilotDrawer({
               <button
                 disabled={actionLoading}
                 onClick={() => handleFinalDecision('request_clarification')}
-                className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                className={`py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer ${
+                  analysis?.humanDecision === 'request_clarification' ? 'ring-2 ring-white' : ''
+                }`}
               >
                 <Send className="w-4 h-4" />
                 <span>Request Clarification</span>
@@ -1726,7 +2143,9 @@ export default function AICopilotDrawer({
               <button
                 disabled={actionLoading}
                 onClick={() => handleFinalDecision('reject')}
-                className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
+                className={`py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 transition-all cursor-pointer ${
+                  analysis?.humanDecision === 'reject' ? 'ring-2 ring-white' : ''
+                }`}
               >
                 <X className="w-4 h-4" />
                 <span>Reject Case</span>

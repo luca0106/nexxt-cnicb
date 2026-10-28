@@ -124,24 +124,33 @@ def _extract_bank_statement_metrics(documents: list, fallback_income: float, fal
                         val = float(m.group(1).replace("+", "").replace(",", ""))
                         if "Month -" in clean:
                             month_label = clean.split(":")[0].strip()
-                            salary_inflows.append({
-                                "month": month_label,
-                                "amount": val,
-                                "lineNumber": idx,
-                                "documentId": stmt_doc.id,
-                                "documentName": stmt_doc.file_name,
-                                "quote": raw_line,
-                            })
+                        elif "|" in clean:
+                            month_label = f"Inflow ({clean.split('|')[0].strip()})"
+                        else:
+                            month_label = f"Salary Inflow #{len(salary_inflows) + 1}"
+                        salary_inflows.append({
+                            "month": month_label,
+                            "amount": val,
+                            "lineNumber": idx,
+                            "documentId": stmt_doc.id,
+                            "docCode": stmt_doc.doc_code or f"doc-{stmt_doc.id}",
+                            "documentName": stmt_doc.file_name,
+                            "quote": raw_line,
+                        })
                     except ValueError:
                         pass
-            if "External Credit Bureau Monthly Debt Service" in clean or "Existing Debt Repayments" in clean:
+            if (
+                "External Credit Bureau Monthly Debt Service" in clean
+                or "Existing Debt Repayments" in clean
+                or "Existing monthly external loan debt" in clean
+            ):
                 m = re.search(r"(\d[\d\.,]*)\s*(?:EUR|RON)", clean)
                 if m:
                     try:
                         external_debt_service = float(m.group(1).replace(",", ""))
                     except ValueError:
                         pass
-            if "Closing Account Balance" in clean:
+            if "Closing Account Balance" in clean or "Closing ledger balance" in clean:
                 m = re.search(r"(\d[\d\.,]*)\s*(?:EUR|RON)", clean)
                 if m:
                     try:
@@ -157,6 +166,7 @@ def _extract_bank_statement_metrics(documents: list, fallback_income: float, fal
     return {
         "hasBankStatement": stmt_doc is not None,
         "documentId": stmt_doc.id if stmt_doc else None,
+        "docCode": (stmt_doc.doc_code or f"doc-{stmt_doc.id}") if stmt_doc else None,
         "documentName": stmt_doc.file_name if stmt_doc else "N/A",
         "iban": iban,
         "salaryInflows": salary_inflows,
@@ -600,6 +610,7 @@ def _run_doc_reconciliation_module(
     name_extractions = [x for x in extracted_fields if x.get("field") == "applicant_name"]
     addr_extractions = [x for x in extracted_fields if x.get("field") == "address"]
     id_val_extractions = [x for x in extracted_fields if x.get("field") == "id_card_validity"]
+    nat_id_extractions = [x for x in extracted_fields if x.get("field") == "national_id"]
 
     doc_incomes_str = ", ".join(sorted({f"€{int(x['value']):,}" for x in income_extractions})) or f"€{int(client.monthly_income or 0):,}"
     sys_income_str = (
@@ -611,11 +622,31 @@ def _run_doc_reconciliation_module(
         f" (+€{int(fp_data['profileOtherIncome']):,} other)" if fp_data["profileOtherIncome"] > 0 else ""
     )
 
-    inc_mismatch = any(f.get("field") == "monthly_income" and f.get("flagType") == "red_flag" for f in findings)
-    name_mismatch = any(f.get("field") == "applicant_name" and f.get("flagType") == "red_flag" for f in findings)
-    addr_mismatch = any(f.get("field") == "address" and f.get("flagType") == "red_flag" for f in findings)
-    id_expired = any(f.get("field") == "id_card_validity" and f.get("flagType") == "red_flag" for f in findings)
+    def _is_unresolved_red(f: dict, field_name: str) -> bool:
+        return (
+            f.get("field") == field_name
+            and f.get("flagType") == "red_flag"
+            and f.get("status") not in ("resolved_by_officer", "confirmed_by_officer")
+        )
+
+    inc_mismatch = any(_is_unresolved_red(f, "monthly_income") for f in findings)
+    name_mismatch = any(_is_unresolved_red(f, "applicant_name") for f in findings)
+    addr_mismatch = any(_is_unresolved_red(f, "address") for f in findings)
+    id_expired = any(_is_unresolved_red(f, "id_card_validity") for f in findings)
     debt_mismatch = abs(fp_data["activeCreditsMonthlyTotal"] - fp_data["clientExistingDebts"]) > 1.0
+
+    def _to_cit(items: list) -> list:
+        return [
+            {
+                "documentId": x.get("documentId"),
+                "docCode": x.get("docCode"),
+                "documentName": x.get("documentName"),
+                "lineNumber": x.get("lineNumber"),
+                "quote": x.get("quote"),
+                "formattedValue": x.get("formattedValue") or str(x.get("value", "")),
+            }
+            for x in items
+        ]
 
     reconciliation_matrix = [
         {
@@ -625,6 +656,7 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": prof_income_str,
             "status": "mismatch" if inc_mismatch else "matched",
             "ruleRef": "PROC-INC-03",
+            "citations": _to_cit(income_extractions),
         },
         {
             "dimension": "Existing Monthly Debt Service",
@@ -633,6 +665,17 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": f"€{fp_data['activeCreditsMonthlyTotal']:,.0f}/mo ({len(fp_data['activeCredits'])} active loans)",
             "status": "mismatch" if debt_mismatch else "matched",
             "ruleRef": "REG-DTI-04",
+            "citations": (
+                [{
+                    "documentId": stmt_metrics["documentId"],
+                    "docCode": stmt_metrics["docCode"],
+                    "documentName": stmt_metrics["documentName"],
+                    "lineNumber": 9,
+                    "quote": f"Existing monthly debt service: €{stmt_metrics['externalDebtService']:,.2f}",
+                    "formattedValue": f"€{stmt_metrics['externalDebtService']:,.0f}/mo",
+                }]
+                if stmt_metrics.get("documentId") else []
+            ),
         },
         {
             "dimension": "Applicant Legal Name",
@@ -641,6 +684,7 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": client.full_name,
             "status": "mismatch" if name_mismatch else "matched",
             "ruleRef": "PROC-KYC-01",
+            "citations": _to_cit(name_extractions),
         },
         {
             "dimension": "National ID (CNP / SSN)",
@@ -649,6 +693,7 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": client.national_id,
             "status": "matched",
             "ruleRef": "PROC-KYC-01",
+            "citations": _to_cit(nat_id_extractions),
         },
         {
             "dimension": "Identity Card Validity",
@@ -657,6 +702,7 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": "Expired — Renewal Required" if id_expired else "Valid Identity Document",
             "status": "mismatch" if id_expired else "matched",
             "ruleRef": "PROC-DOC-02",
+            "citations": _to_cit(id_val_extractions),
         },
         {
             "dimension": "Residential Address",
@@ -665,6 +711,7 @@ def _run_doc_reconciliation_module(
             "financialProfileValue": client.housing_status or "Verified",
             "status": "mismatch" if addr_mismatch else "matched",
             "ruleRef": "PROC-KYC-01",
+            "citations": _to_cit(addr_extractions),
         },
     ]
 
@@ -766,10 +813,13 @@ def build_client_executive_summary_360(
     living_expenses = fp_data["baselineExpensesTotal"]
     net_disposable = round(income_used - (living_expenses + existing_debts + new_installment), 2)
 
-    red_flags = [f for f in findings if f.get("flagType") == "red_flag"]
+    red_flags = [
+        f for f in findings
+        if f.get("flagType") == "red_flag" and f.get("status") not in ("resolved_by_officer", "confirmed_by_officer")
+    ]
     suspected_count = len(fp_data["suspectedExpenses"])
     is_over_dti = dti_pct > 40.0
-    has_expired_id = any(f.get("field") == "id_card_validity" and f.get("flagType") == "red_flag" for f in findings)
+    has_expired_id = any(f.get("field") == "id_card_validity" for f in red_flags)
 
     if is_over_dti or has_expired_id:
         verdict_status = "high_risk_hold"
@@ -940,6 +990,36 @@ def execute_single_modular_agent(agent_id: str, case_obj) -> Dict[str, Any]:
         return _run_doc_reconciliation_module(case_obj, documents, extracted_fields, findings, fp_data)
     else:
         raise ValueError(f"Unknown modular agent_id: {agent_id}")
+
+
+def refresh_modular_results_after_resolution(
+    case_obj,
+    extracted_fields: list,
+    feasibility_math: dict,
+    findings: list,
+    modular_results: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Re-evaluates the DTI & Repayment Capacity and Document Reconciliation pillars
+    using the officer-resolved findings and recalculated feasibility math so that
+    modularResults stay 100% synchronized with Human-in-the-Loop actions.
+    """
+    documents = list(case_obj.documents)
+    if not extracted_fields:
+        extracted_fields = run_extraction_agent(case_obj, documents)
+    profile = _get_financial_profile(case_obj)
+    fp_data = _aggregate_financial_profile_data(case_obj, profile)
+
+    updated = dict(modular_results or {})
+    if "dti_repayment_capacity" in updated:
+        updated["dti_repayment_capacity"] = _run_dti_repayment_capacity_module(
+            case_obj, extracted_fields, feasibility_math, findings, fp_data
+        )
+    if "doc_reconciliation" in updated:
+        updated["doc_reconciliation"] = _run_doc_reconciliation_module(
+            case_obj, documents, extracted_fields, findings, fp_data
+        )
+    return updated
 
 
 def get_case_agent_catalog(case_obj) -> List[Dict[str, Any]]:
