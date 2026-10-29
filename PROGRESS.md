@@ -4,6 +4,8 @@ Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă �
 
 ## Implementat
 
+- Eliminat Audit Trail din interfață: meniul Audit Log, pagina de istoric și tab-ul din dosar; rutele vechi `/history` și `/istoric` ajung la Dashboard prin redirectul general. Mesajele copilotului nu mai menționează Audit Trail. Înregistrările și logarea din backend sunt păstrate.
+- Conversie la inițializarea bazei pentru statusurile vechi ale dosarelor și sarcinilor: `in_lucru` → `in_progress` (In progress), `in_verificare` → `in_review` (In review), `in_asteptare` → `pending` (Pending), cu păstrarea înregistrărilor și datelor de actualizare. Aplicată și bazei SQLite locale.
 - Backend FastAPI cu clienți, dosare, documente, sarcini, istoric și endpoint-uri pentru copilot.
 - Frontend React cu director de clienți și pagină financiară la `/clients/:id/finances`, accesibilă prin **Clients → Financial profile**.
 - Tabelele `financial_profiles`, `client_expenses`, `client_credits` pentru salariu, venit suplimentar, monedă, situație familială, copii, cheltuieli și credite.
@@ -20,7 +22,7 @@ Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă �
   5. **Referințe și acțiuni complete în AI Copilot (`AICopilotDrawer.jsx`, `CaseDetail.jsx`, `ai_copilot.py`, `orchestrator.py`, `modular_agents.py`)**:
      - Toate citările pe documente (din pilonul 2 `salaryInflows`, matricea în 3 direcții din pilonul 3 `reconciliationMatrix`, `findings` și tab-ul `GDPR & OCR`) deschid și evidențiază linia exactă în preview-ul inline și în viewer-ul de documente al dosarului.
      - Butoanele `Validate & Apply` și `Mark as Verified by Officer` actualizează sincronizat atât `findings`, cât și `modularResults`, recalculând DTI-ul în Python și matricea de reconciliere.
-     - Tab-ul `Customer Outreach` folosește un composer interactiv de **Clarification Email** (destinatar, subiect și corp editabile, trimitere/logare în Audit Trail + SMTP opțional și deschidere în aplicația de e-mail prin `mailto:`), eliminând elementele mockuite nefolosite (SMS fals, link fictiv de upload).
+     - Tab-ul `Customer Outreach` folosește un composer interactiv de **Clarification Email** (destinatar, subiect și corp editabile, trimitere/logare în backend + SMTP opțional și deschidere în aplicația de e-mail prin `mailto:`), eliminând elementele mockuite nefolosite (SMS fals, link fictiv de upload).
   6. **Arhitectură decuplată de Plugin B2B Extern (`frontend/src/plugin/`, `/plugin`, `/api/plugin/manifest`)**:
      - Plugin-ul AI este decuplat într-un modul extern vandabil B2B (`PluginContext.jsx`, `PluginIntegrationModal.jsx`, `PluginStandalonePage.jsx`).
      - Include comutator live `External AI Plugin: Connected / Disconnected (Pure CRM)` în header și în pagina de dosar pentru a demonstra `BankDesk` ca aplicație bancară clasică independentă și conectarea instantanee a plugin-ului AI.
@@ -41,6 +43,8 @@ La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit
 
 ## Verificări efectuate
 
+- După eliminarea interfeței Audit Trail (2026-10-29): `npm run build` și `git diff --check` au trecut. Testele backend nu au fost rerulate pentru această modificare exclusiv frontend; verificarea în browser nu a fost efectuată.
+- După conversia statusurilor (2026-10-29): toate cele 19 teste backend au trecut, inclusiv testul migrării repetate și al păstrării datelor. Statusurile vizate nu mai există în dosarele/sarcinile din SQLite local. Build-ul frontend și verificarea în browser nu au fost rulate pentru această modificare exclusiv backend.
 - Cele 18 teste din `backend/tests/` (`test_financial_profiles.py`, `test_agentic.py`, `test_chat.py`) au trecut (2026-10-29, Python 3.14 din Windows).
 - `POST /api/analyses/{id}/chat` a fost verificat prin `TestClient` pe o copie a bazei locale: modul `retrieval_only`, 404 pentru analiză inexistentă, 422 pentru mesaj gol, plus un apel live Bedrock (`agentic_rag`, 6 pași, 7 citări valide, ~27 s).
 - `npm run build` a trecut după actualizarea UI-ului AI Copilot și rezolvarea tuturor referințelor de la butoane.

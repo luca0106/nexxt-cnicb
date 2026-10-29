@@ -102,13 +102,6 @@ export async function toggleTask(taskId) {
   return res.json();
 }
 
-export async function fetchHistory(caseId = null) {
-  const url = caseId ? `${API_BASE}/history?case_id=${caseId}` : `${API_BASE}/history`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to load audit history');
-  return res.json();
-}
-
 // =========================================================
 // RAIFFEISEN AI COPILOT (MULTI-AGENT EXTENSION) API CALLS
 // =========================================================

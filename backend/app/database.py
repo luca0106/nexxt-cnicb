@@ -24,7 +24,7 @@ def get_db():
 
 
 def initialize_database():
-    """Preserve IDs when opening databases created before the national_id rename."""
+    """Upgrade legacy names and statuses while preserving existing records."""
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
     if inspector.has_table('clients'):
@@ -33,3 +33,21 @@ def initialize_database():
             with engine.begin() as connection:
                 connection.execute(text('ALTER TABLE clients RENAME COLUMN cnp TO national_id'))
     Base.metadata.create_all(bind=engine)
+    from .models import Case, Task
+
+    legacy_statuses = {
+        'in_lucru': 'in_progress',
+        'in_verificare': 'in_review',
+        'in_asteptare': 'pending',
+    }
+    with engine.begin() as connection:
+        for model in (Case, Task):
+            for old_status, new_status in legacy_statuses.items():
+                values = {'status': new_status}
+                if model is Case:
+                    values['updated_at'] = Case.updated_at
+                connection.execute(
+                    model.__table__.update()
+                    .where(model.status == old_status)
+                    .values(**values)
+                )

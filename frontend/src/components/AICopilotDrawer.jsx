@@ -282,7 +282,7 @@ export default function AICopilotDrawer({
       showToast(
         resolvedValue !== null
           ? `Value "${resolvedValue}" applied to case and DTI / reconciliation updated!`
-          : 'Finding verified by officer and logged in audit trail!'
+          : 'Finding verified by officer!'
       );
     } catch (err) {
       console.error(err);
@@ -305,7 +305,7 @@ export default function AICopilotDrawer({
       setAnalysis(updated);
       syncEmailDraft(updated, caseData);
       if (onAnalysisUpdated) onAnalysisUpdated(updated);
-      showToast(`Clarification email dispatched to ${emailRecipient || updated.remediation?.recipientEmail} and logged in Audit Trail!`);
+      showToast(`Clarification email dispatched to ${emailRecipient || updated.remediation?.recipientEmail}!`);
     } catch (err) {
       console.error(err);
       showToast('Failed to dispatch clarification email.');
@@ -1663,7 +1663,7 @@ export default function AICopilotDrawer({
                       {f.values && f.values.length > 0 && (
                         <div className="space-y-2 pt-1">
                           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-                            Evidence & Source Citations (Regulatory Audit Trail):
+                            Evidence & Source Citations:
                           </span>
                           <div className="grid grid-cols-1 gap-2">
                             {f.values.map((v, i) => (
@@ -2138,7 +2138,7 @@ export default function AICopilotDrawer({
                 <AgentReportCard analysis={analysis} />
                 <div className="space-y-2.5">
                   <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-amber-400">
-                    Execution Trace (Technical Audit Trail):
+                    Execution Trace:
                   </h4>
                   {analysis?.executionTrace?.map((step, i) => (
                     <div

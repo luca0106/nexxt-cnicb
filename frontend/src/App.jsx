@@ -8,7 +8,6 @@ import ClientsList from './pages/ClientsList';
 import ClientFinancialProfile from './pages/ClientFinancialProfile';
 import DocumentsList from './pages/DocumentsList';
 import TasksList from './pages/TasksList';
-import HistoryList from './pages/HistoryList';
 import { PluginProvider } from './plugin/PluginContext';
 import PluginStandalonePage from './plugin/PluginStandalonePage';
 
@@ -31,7 +30,6 @@ export default function App() {
             <Route path="clients/:id/finances" element={<ClientFinancialProfile />} />
             <Route path="documents" element={<DocumentsList />} />
             <Route path="tasks" element={<TasksList />} />
-            <Route path="history" element={<HistoryList />} />
 
             {/* Legacy Romanian redirects */}
             <Route path="dosare" element={<Navigate to="/cases" replace />} />
@@ -39,7 +37,6 @@ export default function App() {
             <Route path="clienti" element={<Navigate to="/clients" replace />} />
             <Route path="documente" element={<Navigate to="/documents" replace />} />
             <Route path="sarcini" element={<Navigate to="/tasks" replace />} />
-            <Route path="istoric" element={<Navigate to="/history" replace />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

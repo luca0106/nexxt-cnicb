@@ -5,11 +5,9 @@ import {
   Folder,
   FileText,
   User,
-  Clock,
   AlertTriangle,
   Eye,
   CheckSquare,
-  History,
   FileCheck,
   X,
   Sparkles,
@@ -55,7 +53,7 @@ export default function CaseDetail() {
   const [latestAnalysis, setLatestAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('documents'); // documents, manual_verification, credit_bureau, tasks, history
+  const [activeTab, setActiveTab] = useState('documents'); // documents, manual_verification, credit_bureau, tasks
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [highlightedLine, setHighlightedLine] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -630,7 +628,7 @@ export default function CaseDetail() {
             </span>
           </div>
 
-          {/* Official BankDesk Tabs: Documents, Manual Verification, Credit Bureau, Tasks, Audit History */}
+          {/* Official BankDesk Tabs: Documents, Manual Verification, Credit Bureau, Tasks */}
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#142036] pb-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -680,18 +678,6 @@ export default function CaseDetail() {
                 >
                   <CheckSquare className="w-4 h-4" />
                   <span>Tasks ({caseData.tasks.length})</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    activeTab === 'history'
-                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <History className="w-4 h-4" />
-                  <span>Audit Trail ({caseData.history_entries.length})</span>
                 </button>
               </div>
 
@@ -1064,32 +1050,6 @@ export default function CaseDetail() {
                     ))}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* TAB 5: AUDIT TRAIL & LOGS */}
-            {activeTab === 'history' && (
-              <div className="space-y-3">
-                {caseData.history_entries.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-4 rounded-xl bg-[#090f1e] border border-[#142036] flex items-start gap-3.5"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-blue-950/50 border border-blue-900/60 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 text-xs sm:text-sm min-w-0">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-semibold text-white">{log.action}</span>
-                        <span className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString()}</span>
-                      </div>
-                      <p className="text-slate-300 mt-1 break-words">{log.details}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Performed By: <span className="text-slate-400 font-medium">{log.performed_by}</span>
-                      </p>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </div>
