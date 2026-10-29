@@ -4,6 +4,8 @@ Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă �
 
 ## Implementat
 
+- Traduse tipurile vechi de documente la inițializare și în SQLite local: `Formular cerere` → `Application Form`, plus adeverință venit, copie CI, extras financiar și factură utilități. Conținutul și celelalte câmpuri ale documentelor sunt păstrate.
+- Traduse la inițializare tipurile și titlurile vechi din Cases (inclusiv `Credit de Nevoi Personale` → `Personal Consumer Loan` și `Dosar operațional #…` → `Operational Case #…`), cu păstrarea celorlalte câmpuri și a datei de actualizare. Conversie aplicată și bazei SQLite locale.
 - Eliminat Audit Trail din interfață: meniul Audit Log, pagina de istoric și tab-ul din dosar; rutele vechi `/history` și `/istoric` ajung la Dashboard prin redirectul general. Mesajele copilotului nu mai menționează Audit Trail. Înregistrările și logarea din backend sunt păstrate.
 - Conversie la inițializarea bazei pentru statusurile vechi ale dosarelor și sarcinilor: `in_lucru` → `in_progress` (In progress), `in_verificare` → `in_review` (In review), `in_asteptare` → `pending` (Pending), cu păstrarea înregistrărilor și datelor de actualizare. Aplicată și bazei SQLite locale.
 - Backend FastAPI cu clienți, dosare, documente, sarcini, istoric și endpoint-uri pentru copilot.
@@ -43,6 +45,8 @@ La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit
 
 ## Verificări efectuate
 
+- După traducerea tipurilor de documente (2026-10-29): 20 de teste backend și `git diff --check` au trecut. Conversia repetată pe baza locală a fost verificată, inclusiv păstrarea tuturor câmpurilor în afară de tip. Build-ul frontend și verificarea în browser nu au fost rulate (modificare backend/date).
+- După traducerea denumirilor din Cases (2026-10-29): toate cele 20 de teste backend și `git diff --check` au trecut; verificarea bazei locale a confirmat păstrarea câmpurilor din afara titlului și tipului. Build-ul frontend și verificarea în browser nu au fost rulate pentru această modificare exclusiv backend/date.
 - După eliminarea interfeței Audit Trail (2026-10-29): `npm run build` și `git diff --check` au trecut. Testele backend nu au fost rerulate pentru această modificare exclusiv frontend; verificarea în browser nu a fost efectuată.
 - După conversia statusurilor (2026-10-29): toate cele 19 teste backend au trecut, inclusiv testul migrării repetate și al păstrării datelor. Statusurile vizate nu mai există în dosarele/sarcinile din SQLite local. Build-ul frontend și verificarea în browser nu au fost rulate pentru această modificare exclusiv backend.
 - Cele 18 teste din `backend/tests/` (`test_financial_profiles.py`, `test_agentic.py`, `test_chat.py`) au trecut (2026-10-29, Python 3.14 din Windows).
