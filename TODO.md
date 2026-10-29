@@ -22,6 +22,14 @@ Listă de lucrări propuse, nu implementate. Starea curentă este în [PROGRESS.
 - [ ] Stabilirea unui flux explicit pentru modificarea monedei și eventuala conversie.
 - [ ] Migrații versionate pentru viitoarele schimbări ale schemei.
 
+## Agentic RAG (Ask Copilot)
+
+- [x] Verificare în browser a tab-ului **Ask Copilot**: întrebare și citare deschisă la linia exactă (desktop, 2026-10-29).
+- [ ] Verificare în browser: starea de eroare cu backend-ul oprit și afișarea pe mobil.
+- [ ] Decizie: persistarea conversațiilor și logarea întrebărilor în Audit Trail.
+- [ ] Evaluare retrieval semantic (embeddings) față de BM25 pe întrebări reale ale ofițerilor.
+- [ ] Streaming al pașilor agentului; un răspuns durează acum ~20-30 s.
+
 ## Calitate
 
 - [ ] Teste UI pentru totaluri și pentru salvare/reîncărcare, când este disponibil un mediu de browser.
