@@ -6,7 +6,6 @@ import {
   Folder,
   FileText,
   CheckSquare,
-  History,
   X
 } from 'lucide-react';
 
@@ -16,7 +15,6 @@ const navItems = [
   { name: 'Cases', path: '/cases', icon: Folder },
   { name: 'Documents', path: '/documents', icon: FileText },
   { name: 'Tasks', path: '/tasks', icon: CheckSquare },
-  { name: 'Audit Log', path: '/history', icon: History },
 ];
 
 export default function Sidebar({ isMobileOpen, onCloseMobile, isCollapsed }) {
