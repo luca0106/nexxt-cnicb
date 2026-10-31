@@ -1,8 +1,10 @@
 # Progres
 
-Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă și verificările din sesiunea de dezvoltare.
+Actualizat: 2026-10-31. Starea documentată reflectă implementarea existentă și verificările din sesiunea de dezvoltare.
 
 ## Implementat
+
+- Traduse textele demo rămase în română: departamente, note de dosar, sarcini, conținut OCR, mesaje de istoric și citări/texte din analizele salvate. Conversie repetabilă la inițializare și aplicată bazei SQLite locale (33 dosare, 40 documente, 3 sarcini, 4 intrări de istoric și 6 analize). Numele, adresele, fișierele, identificatorii, valorile financiare, statusurile și timestamp-urile sunt păstrate; numerele de linie și citările rămân sincronizate. Copilotul răspunde în engleză și pentru saluturi/întrebări în română; fallback-urile de sucursală și dobândă sunt în engleză.
 
 - Traduse tipurile vechi de documente la inițializare și în SQLite local: `Formular cerere` → `Application Form`, plus adeverință venit, copie CI, extras financiar și factură utilități. Conținutul și celelalte câmpuri ale documentelor sunt păstrate.
 - Traduse la inițializare tipurile și titlurile vechi din Cases (inclusiv `Credit de Nevoi Personale` → `Personal Consumer Loan` și `Dosar operațional #…` → `Operational Case #…`), cu păstrarea celorlalte câmpuri și a datei de actualizare. Conversie aplicată și bazei SQLite locale.
@@ -44,6 +46,8 @@ Actualizat: 2026-10-29. Starea documentată reflectă implementarea existentă �
 La ultima verificare a bazei SQLite locale: **218 clienți, 218 dosare de credit, 965 documente, 188 sarcini operaționale, 374 intrări de audit, 218 profiluri financiare, 1.823 cheltuieli și 124 credite**. Acestea sunt valori sintetice, nu date bancare reale. Numerele se pot schimba după editări; nu sunt garanții pentru orice bază de date configurată.
 
 ## Verificări efectuate
+
+- După traducerea textelor rămase (2026-10-31): toate cele 21 de teste backend, `npm run build` și `git diff --check` au trecut. Conversia bazei locale a fost verificată pentru repetabilitate, păstrarea numărului de înregistrări și a câmpurilor neafectate, inclusiv timestamp-uri. Backup înainte de conversie: `/tmp/nexxt-before-english-crxn5d8o.db`. Verificarea în browser nu a fost efectuată.
 
 - După traducerea tipurilor de documente (2026-10-29): 20 de teste backend și `git diff --check` au trecut. Conversia repetată pe baza locală a fost verificată, inclusiv păstrarea tuturor câmpurilor în afară de tip. Build-ul frontend și verificarea în browser nu au fost rulate (modificare backend/date).
 - După traducerea denumirilor din Cases (2026-10-29): toate cele 20 de teste backend și `git diff --check` au trecut; verificarea bazei locale a confirmat păstrarea câmpurilor din afara titlului și tipului. Build-ul frontend și verificarea în browser nu au fost rulate pentru această modificare exclusiv backend/date.

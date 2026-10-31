@@ -32,5 +32,7 @@ Listă de lucrări propuse, nu implementate. Starea curentă este în [PROGRESS.
 
 ## Calitate
 
+- [x] Traducerea textelor demo rămase în română și a răspunsurilor copilotului, inclusiv citările din analizele existente (2026-10-31).
+
 - [ ] Teste UI pentru totaluri și pentru salvare/reîncărcare, când este disponibil un mediu de browser.
 - [ ] Înlocuirea treptată a `datetime.utcnow()` pentru eliminarea avertismentelor de depreciere.
