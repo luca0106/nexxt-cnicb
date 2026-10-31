@@ -100,3 +100,6 @@ def initialize_database():
                 .where(Document.document_type == old_label)
                 .values(document_type=new_label)
             )
+
+        from .english_migration import translate_legacy_copy
+        translate_legacy_copy(connection)

@@ -78,7 +78,7 @@ class CopilotChatTest(unittest.TestCase):
 
     def test_small_talk_is_answered_without_llm(self):
         llm = ScriptedLLM([])  # any call would fail: no responses prepared
-        for message, word in (("what's up?", "Hey"), ("Salut, ce faci?", "Salut"), ("mersi!", "plăcere"),
+        for message, word in (("what's up?", "Hey"), ("Salut, ce faci?", "Hey"), ("mersi!", "welcome"),
                               ("thanks", "welcome")):
             out = chat_with_case(self.case, ANALYSIS, message, llm=llm)
             self.assertEqual(out["mode"], "small_talk", message)
